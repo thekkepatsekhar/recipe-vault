@@ -112,6 +112,10 @@
           <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
           <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open PDF in Drive</button>
           <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
+          <div style="display:flex;gap:8px;margin-top:0">
+            <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
+            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red,#c0392b);border-color:var(--clr-red,#c0392b);padding:12px 16px">🗑️</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -321,6 +325,55 @@
 </div>
 
 <!-- MODALS -->
+<!-- EDIT RECIPE MODAL -->
+<div id="edit-recipe-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:520px;max-height:85vh;overflow-y:auto">
+    <h3 class="modal-title">✏️ Edit recipe</h3>
+    <label class="field-label">Recipe name
+      <input class="field-input" id="edit-name" type="text" />
+    </label>
+    <label class="field-label">Cuisine <span class="field-hint">(determines folder in Drive)</span>
+      <input class="field-input" id="edit-cuisine" type="text" />
+    </label>
+    <label class="field-label">Cook time
+      <input class="field-input" id="edit-time" type="text" />
+    </label>
+    <label class="field-label">Servings
+      <input class="field-input" id="edit-servings" type="number" min="1" />
+    </label>
+    <label class="field-label">Tags <span class="field-hint">(comma separated, e.g. Quick, Vegetarian)</span>
+      <input class="field-input" id="edit-tags" type="text" />
+    </label>
+    <label class="field-label">Ingredients <span class="field-hint">(one per line)</span>
+      <textarea class="field-input field-textarea" id="edit-ingredients" rows="8"></textarea>
+    </label>
+    <label class="field-label">Steps <span class="field-hint">(one per line)</span>
+      <textarea class="field-input field-textarea" id="edit-steps" rows="8"></textarea>
+    </label>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-primary" style="flex:1" onclick="saveEditedRecipe()">💾 Save changes</button>
+      <button class="btn-ghost" style="flex:1" onclick="closeModal('edit-recipe-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div id="delete-recipe-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h3 class="modal-title">🗑️ Delete recipe</h3>
+    <p class="modal-sub">Are you sure you want to delete <strong id="delete-recipe-name">—</strong>?</p>
+    <div id="delete-drive-option" style="background:var(--clr-paper-mid);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;font-size:14px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="checkbox" id="delete-from-drive" style="width:18px;height:18px" />
+        <span>Also delete the file from Google Drive</span>
+      </label>
+      <p style="font-size:12px;color:var(--clr-muted);margin-top:6px;margin-left:28px">If unchecked, the recipe stays in Drive but is removed from this app.</p>
+    </div>
+    <button class="btn-primary full-width" style="background:var(--clr-red,#c0392b);border-color:var(--clr-red,#c0392b)" onclick="executeDeleteRecipe()">Delete</button>
+    <button class="btn-ghost full-width" style="margin-top:8px" onclick="closeModal('delete-recipe-modal')">Cancel</button>
+  </div>
+</div>
+
 <div id="planner-list-modal" class="modal-overlay hidden">
   <div class="modal-card">
     <h3 class="modal-title">Build shopping list</h3>

@@ -878,6 +878,155 @@ function resync(){
     navigate('settings');
   }
 }
+// ── EDIT RECIPE ───────────────────────────────────────────────────────────────
+function openEditRecipeModal() {
+  if (!state.currentRecipe) return;
+  const r = state.currentRecipe;
+
+  document.getElementById('edit-name').value        = r.name        || '';
+  document.getElementById('edit-cuisine').value     = r.cuisine     || '';
+  document.getElementById('edit-time').value        = r.time        || '';
+  document.getElementById('edit-servings').value    = r.servings    || 4;
+  document.getElementById('edit-tags').value        = (r.tags||[]).join(', ');
+  document.getElementById('edit-ingredients').value = (r.ingredients||[])
+    .map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
+  document.getElementById('edit-steps').value       = (r.steps||[]).join('\n');
+
+  document.getElementById('edit-recipe-modal').classList.remove('hidden');
+}
+
+async function saveEditedRecipe() {
+  if (!state.currentRecipe) return;
+
+  const name      = document.getElementById('edit-name').value.trim();
+  const cuisine   = document.getElementById('edit-cuisine').value.trim() || 'Other';
+  const time      = document.getElementById('edit-time').value.trim();
+  const servings  = parseInt(document.getElementById('edit-servings').value) || 4;
+  const tagsRaw   = document.getElementById('edit-tags').value.trim();
+  const tags      = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  const ingsRaw   = document.getElementById('edit-ingredients').value.trim().split('\n').filter(Boolean);
+  const stepsRaw  = document.getElementById('edit-steps').value.trim().split('\n').filter(Boolean);
+
+  if (!name) { document.getElementById('edit-name').focus(); showToast('Name is required'); return; }
+
+  const ingredients = ingsRaw.map(line => {
+    const m = line.match(/^([\d.\/]+\s*(?:g|kg|ml|l|tsp|tbsp|cup|oz|lb|cloves?|bunch|pinch|large|medium|small|handful)?)\s+(.*)/i);
+    return m ? { amount: m[1].trim(), item: m[2].trim() } : { amount: '', item: line };
+  });
+
+  // Update the recipe object
+  const updated = {
+    ...state.currentRecipe,
+    name, cuisine, time, servings, tags, ingredients,
+    steps: stepsRaw,
+    emoji: guessEmoji(cuisine),
+  };
+
+  // Update in state
+  state.currentRecipe = updated;
+  const idx = state.recipes.findIndex(r => r.id === updated.id);
+  if (idx !== -1) state.recipes[idx] = updated;
+
+  // Update cache if it's a Drive recipe
+  if (updated.driveFileId) {
+    const cache = getCachedRecipes();
+    cache['drive_' + updated.driveFileId] = updated;
+    saveCachedRecipes(cache);
+  }
+
+  // Re-render detail panel with updated info
+  document.getElementById('detail-name').textContent      = updated.name;
+  document.getElementById('detail-emoji').textContent     = updated.emoji;
+  document.getElementById('detail-meta-row').textContent  = updated.cuisine + ' · ' + updated.time + ' · ' + updated.servings + ' servings';
+  const tagsEl = document.getElementById('detail-tags');
+  if (tagsEl) tagsEl.innerHTML =
+    `<span class="tag tag-cuisine">${updated.cuisine}</span>` +
+    `<span class="tag tag-time">⏱ ${updated.time}</span>` +
+    tags.map(t => `<span class="tag tag-other">${t}</span>`).join('');
+  renderIngredients();
+  renderSteps(updated.steps);
+  buildCuisineChips();
+  applyFilters();
+
+  closeModal('edit-recipe-modal');
+
+  // Save back to Drive if signed in
+  if (typeof saveRecipeToDrive === 'function' && drive?.isSignedIn) {
+    showToast('Saving changes to Drive…');
+    try {
+      await saveRecipeToDrive(updated);
+    } catch(e) {
+      showToast('Saved locally — Drive sync failed');
+    }
+  } else {
+    showToast('Recipe updated ✓');
+  }
+}
+
+// ── DELETE RECIPE ─────────────────────────────────────────────────────────────
+function confirmDeleteRecipe() {
+  if (!state.currentRecipe) return;
+  const r = state.currentRecipe;
+  document.getElementById('delete-recipe-name').textContent = r.name;
+
+  // Only show Drive delete option if it's a Drive recipe
+  const driveOpt = document.getElementById('delete-drive-option');
+  const hasFile  = !!(r.driveFileId || r.cloudPath);
+  if (driveOpt) driveOpt.style.display = hasFile ? 'block' : 'none';
+  const cb = document.getElementById('delete-from-drive');
+  if (cb) cb.checked = false;
+
+  document.getElementById('delete-recipe-modal').classList.remove('hidden');
+}
+
+async function executeDeleteRecipe() {
+  if (!state.currentRecipe) return;
+  const r               = state.currentRecipe;
+  const deleteFromDrive = document.getElementById('delete-from-drive')?.checked;
+
+  closeModal('delete-recipe-modal');
+
+  // Remove from state
+  state.recipes = state.recipes.filter(recipe => recipe.id !== r.id);
+
+  // Remove from cache
+  if (r.driveFileId) {
+    const cache = getCachedRecipes();
+    delete cache['drive_' + r.driveFileId];
+    saveCachedRecipes(cache);
+  }
+
+  // Remove from shopping list if present
+  state.shoppingItems   = state.shoppingItems.filter(i => i.recipeId !== r.id);
+  state.shoppingRecipes = state.shoppingRecipes.filter(n => n !== r.name);
+  saveShoppingList();
+  updateShoppingBadge();
+
+  // Remove from planner
+  Object.keys(state.plannerData).forEach(day => {
+    state.plannerData[day] = state.plannerData[day].filter(m => m.id !== r.id);
+  });
+  localStorage.setItem('rv_planner', JSON.stringify(state.plannerData));
+
+  // Delete from Drive if requested
+  if (deleteFromDrive && r.driveFileId && drive?.isSignedIn) {
+    try {
+      await gfetch('https://www.googleapis.com/drive/v3/files/' + r.driveFileId, {
+        method: 'DELETE',
+      });
+      showToast('"' + r.name + '" deleted from Drive ✓');
+    } catch(e) {
+      showToast('Removed from app — Drive delete failed');
+    }
+  } else {
+    showToast('"' + r.name + '" removed ✓');
+  }
+
+  closeDetail();
+  buildCuisineChips();
+  applyFilters();
+}
+
 function saveAnthropicKey() {
   const field = document.getElementById('anthropic-key');
   if (!field) return;

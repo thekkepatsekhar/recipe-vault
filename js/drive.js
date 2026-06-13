@@ -486,25 +486,66 @@ IMPORTANT:
 
 // ── SAVE TO DRIVE ─────────────────────────────────────────────────────────────
 async function saveRecipeToDrive(recipe) {
-  if (!drive.isSignedIn) { showToast('Sign in to Google Drive to save recipes'); return false; }
-  try {
-    const rootName   = (drive.folderPath || 'Recipes').replace(/^\//, '');
-    let   rootFolder = await findOrNull(`name='${rootName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-    if (!rootFolder) rootFolder = await createFolder(rootName, 'root');
+  if (!drive.isSignedIn || !drive.accessToken) {
+    showToast('Sign in to Google Drive first');
+    return false;
+  }
 
-    let cuisineFolder = await findOrNull(`name='${recipe.cuisine}' and '${rootFolder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
-    if (!cuisineFolder) cuisineFolder = await createFolder(recipe.cuisine, rootFolder.id);
+  // Check token is still valid with a lightweight API call
+  try {
+    await gfetch('https://www.googleapis.com/drive/v3/about?fields=user');
+  } catch(e) {
+    showToast('Drive session expired — please sign in again in Settings');
+    drive.isSignedIn = false;
+    updateSignInUI(false);
+    updateCloudBadge();
+    return false;
+  }
+
+  try {
+    const rootName = (drive.folderPath || 'Recipes').replace(/^\//, '');
+
+    // Find or create Recipes root folder
+    let rootFolder = await findOrNull(
+      `name='${rootName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    );
+    if (!rootFolder) {
+      rootFolder = await createFolder(rootName, 'root');
+      if (!rootFolder?.id) throw new Error('Could not create Recipes folder');
+    }
+
+    // Find or create cuisine subfolder
+    let cuisineFolder = await findOrNull(
+      `name='${recipe.cuisine}' and '${rootFolder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+    );
+    if (!cuisineFolder) {
+      cuisineFolder = await createFolder(recipe.cuisine, rootFolder.id);
+      if (!cuisineFolder?.id) throw new Error('Could not create cuisine folder');
+    }
 
     const content  = buildRecipeText(recipe);
     const fileName = recipe.name + '.txt';
-    const existing = await findOrNull(`name='${fileName}' and '${cuisineFolder.id}' in parents and trashed=false`);
-    if (existing) await updateDriveFile(existing.id, content);
-    else          await createDriveFile(fileName, content, cuisineFolder.id);
+
+    // Check if file already exists
+    const existing = await findOrNull(
+      `name='${fileName}' and '${cuisineFolder.id}' in parents and trashed=false`
+    );
+
+    let result;
+    if (existing) {
+      result = await updateDriveFile(existing.id, content);
+    } else {
+      result = await createDriveFile(fileName, content, cuisineFolder.id);
+    }
+
+    if (!result?.id) throw new Error('File was not created — no ID returned');
+
     showToast('"' + recipe.name + '" saved to Drive ✓');
     return true;
+
   } catch(e) {
     console.error('Save to Drive failed:', e);
-    showToast('Could not save to Drive: ' + e.message);
+    showToast('Drive save failed: ' + e.message);
     return false;
   }
 }
@@ -539,22 +580,43 @@ async function createFolder(name, parentId) {
 
 async function createDriveFile(name, content, parentId) {
   const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify({ name, parents: [parentId], mimeType: 'text/plain' })], { type: 'application/json' }));
-  form.append('file',     new Blob([content], { type: 'text/plain' }));
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + drive.accessToken },
-    body: form,
-  });
+  form.append('metadata', new Blob([JSON.stringify({
+    name, parents: [parentId], mimeType: 'text/plain'
+  })], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: 'text/plain' }));
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+    {
+      method:  'POST',
+      headers: { 'Authorization': 'Bearer ' + drive.accessToken },
+      body:    form,
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('Create file failed ' + res.status + ': ' + (err.error?.message || res.statusText));
+  }
   return res.json();
 }
 
 async function updateDriveFile(fileId, content) {
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media', {
-    method: 'PATCH',
-    headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'text/plain' },
-    body: content,
-  });
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media',
+    {
+      method:  'PATCH',
+      headers: {
+        'Authorization': 'Bearer ' + drive.accessToken,
+        'Content-Type':  'text/plain',
+      },
+      body: content,
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('Update file failed ' + res.status + ': ' + (err.error?.message || res.statusText));
+  }
   return res.json();
 }
 
