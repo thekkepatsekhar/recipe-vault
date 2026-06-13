@@ -1,0 +1,931 @@
+// ── RECIPE VAULT — APP LOGIC ──────────────────────────────────────────────────
+
+const state = {
+  folderPath:      localStorage.getItem('rv_folder') || 'Recipes',
+  recipes:         [],
+  currentFilter:   'all',
+  currentSearch:   '',
+  currentRecipe:   null,
+  currentServings: 2,
+  baseServings:    2,
+  shoppingItems:   safeJSON('rv_shopping',   []),
+  shoppingRecipes: safeJSON('rv_shopping_recipes', []),
+  plannerData:     safeJSON('rv_planner',    {}),
+  weekOffset:      0,
+  cookSteps:       [],
+  cookStepIndex:   0,
+  voiceActive:     false,
+  speechSynth:     window.speechSynthesis || null,
+  speechRecog:     null,
+  exportTarget:    localStorage.getItem('rv_export') || 'share',
+  isDesktop:       () => window.innerWidth > 768,
+};
+
+function safeJSON(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch(e) { return fallback; }
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const splash = document.getElementById('splash');
+    if (splash) splash.classList.add('fade-out');
+    setTimeout(bootApp, 500);
+  }, 1200);
+});
+
+function bootApp() {
+  state.recipes = DEMO_RECIPES;
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('hidden');
+  updateCloudBadge();
+  buildCuisineChips();
+  renderRecipes(state.recipes);
+  updateShoppingBadge();
+  renderPlannerWeek();
+  const fp = document.getElementById('folder-path');
+  if (fp) { fp.value = state.folderPath; fp.addEventListener('change', () => { state.folderPath = fp.value.trim().replace(/^\//,''); localStorage.setItem('rv_folder', state.folderPath); }); }
+  const exp = document.getElementById('export-target');
+  if (exp) { exp.value = state.exportTarget; exp.addEventListener('change', () => { state.exportTarget = exp.value; localStorage.setItem('rv_export', exp.value); }); }
+  initGoogleAuth();
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function navigate(screen) {
+  document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); });
+  const target = document.getElementById('screen-' + screen);
+  if (target) { target.classList.remove('hidden'); target.classList.add('active'); }
+  document.querySelectorAll('.sn-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+  if (screen === 'shopping') renderShopping();
+  if (screen === 'planner')  renderPlannerWeek();
+  if (screen === 'settings') renderSettings();
+  // On mobile close detail panel when navigating away from recipes
+  if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
+}
+
+function renderSettings() {
+  const status = document.getElementById('cloud-status');
+  const sd = (typeof drive !== 'undefined') && drive.isSignedIn;
+  if (status) status.textContent = sd ? '✓ Connected as ' + (drive.userProfile?.email||'Google User') : 'Not connected — click Sign in';
+  if (typeof updateSignInUI === 'function') updateSignInUI(sd);
+  const rc = document.getElementById('sett-recipe-count');
+  const mc = document.getElementById('sett-meal-count');
+  if (rc) rc.textContent = state.recipes.length + ' recipes';
+  if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
+  if (typeof buildThemeEditor === 'function') buildThemeEditor();
+}
+
+// ── CLOUD BADGE ───────────────────────────────────────────────────────────────
+function updateCloudBadge() {
+  const icon=document.getElementById('cloud-icon'), label=document.getElementById('cloud-label');
+  const sd=(typeof drive!=='undefined')&&drive.isSignedIn;
+  if (icon)  icon.textContent  = sd?'🟢':'☁️';
+  if (label) label.textContent = sd?(drive.userProfile?.email||'Google Drive'):'Sign in to connect';
+}
+
+// ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
+function buildCuisineChips() {
+  const container = document.getElementById('cuisine-chips');
+  if (!container) return;
+  [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+  getCuisines().forEach(c => {
+    const btn = document.createElement('button');
+    btn.className='chip'; btn.dataset.filter=c; btn.textContent=c;
+    btn.onclick=()=>setFilter(btn,c);
+    container.appendChild(btn);
+  });
+}
+
+function setFilter(el, filter) {
+  document.querySelectorAll('#cuisine-chips .chip').forEach(c=>c.classList.remove('chip-active'));
+  if (el) el.classList.add('chip-active');
+  state.currentFilter=filter; applyFilters();
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const inp=document.getElementById('search-input');
+  if (!inp) return;
+  inp.addEventListener('input', e=>{
+    state.currentSearch=e.target.value.trim().toLowerCase();
+    document.getElementById('search-clear')?.classList.toggle('hidden',!state.currentSearch);
+    applyFilters();
+  });
+});
+
+function clearSearch() {
+  const inp=document.getElementById('search-input');
+  if (inp) inp.value='';
+  state.currentSearch='';
+  document.getElementById('search-clear')?.classList.add('hidden');
+  applyFilters();
+}
+
+function applyFilters() {
+  let list=state.recipes;
+  if (state.currentFilter&&state.currentFilter!=='all') list=list.filter(r=>r.cuisine===state.currentFilter);
+  if (state.currentSearch) {
+    const q=state.currentSearch;
+    list=list.filter(r=>
+      r.name.toLowerCase().includes(q)||
+      r.cuisine.toLowerCase().includes(q)||
+      (r.ingredients||[]).some(i=>i.item.toLowerCase().includes(q))||
+      (r.tags||[]).some(t=>t.toLowerCase().includes(q))
+    );
+  }
+  renderRecipes(list);
+}
+
+// ── RECIPE LIST ───────────────────────────────────────────────────────────────
+function renderRecipes(list) {
+  const grid=document.getElementById('recipe-grid');
+  const stEmpty=document.getElementById('recipes-state-empty');
+  const stNoRes=document.getElementById('recipes-state-no-results');
+  const countLbl=document.getElementById('recipe-count-label');
+  if (!grid) return;
+  grid.innerHTML=''; stEmpty?.classList.add('hidden'); stNoRes?.classList.add('hidden');
+  if (!state.recipes.length){stEmpty?.classList.remove('hidden');return;}
+  if (!list.length){stNoRes?.classList.remove('hidden');return;}
+  if (countLbl) countLbl.textContent=list.length+' recipe'+(list.length!==1?'s':'');
+  list.forEach(recipe=>{
+    const card=document.createElement('div');
+    card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0');
+    card.innerHTML=`
+      <div class="recipe-thumb">${recipe.emoji||'🍽️'}</div>
+      <div class="recipe-info">
+        <div class="recipe-name">${recipe.name}</div>
+        <div class="recipe-sub">${recipe.cuisine} · ${recipe.time}</div>
+      </div>
+      <span class="recipe-arrow">›</span>`;
+    card.onclick=()=>openRecipe(recipe);
+    card.onkeydown=e=>{if(e.key==='Enter')openRecipe(recipe);};
+    grid.appendChild(card);
+  });
+}
+
+// ── RECIPE DETAIL ─────────────────────────────────────────────────────────────
+function openRecipe(recipe) {
+  state.currentRecipe   = recipe;
+  state.currentServings = recipe.servings||2;
+  state.baseServings    = recipe.servings||2;
+
+  document.getElementById('detail-emoji').textContent = recipe.emoji||'🍽️';
+  document.getElementById('detail-name').textContent  = recipe.name;
+  document.getElementById('detail-meta-row').textContent = recipe.cuisine+' · '+recipe.time+' · '+(recipe.servings||2)+' servings';
+
+  const tagsEl=document.getElementById('detail-tags');
+  if (tagsEl) tagsEl.innerHTML=
+    `<span class="tag tag-cuisine">${recipe.cuisine}</span>`+
+    `<span class="tag tag-time">⏱ ${recipe.time}</span>`+
+    (recipe.tags||[]).map(t=>`<span class="tag tag-other">${t}</span>`).join('');
+
+  renderIngredients();
+  renderNutrition(recipe.nutrition);
+  renderSteps(recipe.steps);
+
+  // Show "Save to Drive" button for imported recipes not yet in Drive
+  const btnSave = document.getElementById('btn-save-drive');
+  const btnOpen = document.getElementById('btn-open-drive');
+  const isImported = (recipe.tags||[]).includes('Imported') && !recipe.driveFileId;
+  if (btnSave) btnSave.classList.toggle('hidden', !isImported);
+  if (btnOpen) btnOpen.classList.toggle('hidden', isImported);
+
+  const panel=document.getElementById('detail-panel');
+  if (!panel) return;
+
+  if (state.isDesktop()) {
+    // Desktop: side panel
+    panel.classList.remove('hidden');
+    panel.style.cssText='';
+  } else {
+    // Mobile: full screen, sits above bottom nav, with padding so buttons aren't hidden
+    panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:64px;width:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+    panel.classList.remove('hidden');
+    // Scroll to top so close button is visible
+    panel.scrollTop = 0;
+  }
+}
+
+function closeDetail() {
+  const panel=document.getElementById('detail-panel');
+  if (!panel) return;
+  panel.classList.add('hidden');
+  panel.style.cssText='';
+  state.currentRecipe=null;
+}
+
+function renderIngredients() {
+  const list = document.getElementById('ingredient-list');
+  if (!list || !state.currentRecipe) return;
+  const ratio = state.currentServings / state.baseServings;
+  const ings  = state.currentRecipe.ingredients || [];
+
+  if (ings.length === 0) {
+    list.innerHTML = `<li style="padding:12px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
+      No ingredients extracted yet.${state.currentRecipe.driveFileId
+        ? '<br><button onclick="reExtractCurrentRecipe()" class="btn-primary" style="margin-top:10px;font-size:13px;padding:8px 16px">✨ Extract with AI</button>'
+        : ''
+      }</li>`;
+  } else {
+    list.innerHTML = ings.map(i =>
+      `<li class="ingredient-item"><span class="ingredient-amount">${scaleAmount(i.amount||'',ratio)}</span><span>${i.item}</span></li>`
+    ).join('');
+  }
+
+  const sn = document.getElementById('serving-num');
+  if (sn) sn.textContent = state.currentServings;
+}
+
+function scaleAmount(amount,ratio) {
+  if (ratio===1||!amount) return amount;
+  const match=amount.match(/^([\d.\/]+)\s*(.*)/);
+  if (!match) return amount;
+  let num=match[1].includes('/')?eval(match[1]):parseFloat(match[1]);
+  const unit=match[2];
+  const scaled=num*ratio;
+  const display=scaled%1===0?scaled.toFixed(0):scaled.toFixed(1).replace(/\.0$/,'');
+  return display+(unit?' '+unit:'');
+}
+
+function changeServings(delta) {
+  const next=state.currentServings+delta;
+  if (next<1||next>20) return;
+  state.currentServings=next;
+  renderIngredients();
+  renderNutrition(state.currentRecipe?.nutrition);
+}
+
+function renderNutrition(nut) {
+  const sec=document.getElementById('nutrition-section');
+  if (!nut){sec?.classList.add('hidden');return;}
+  sec?.classList.remove('hidden');
+  const ratio=state.currentServings/state.baseServings;
+  const n=v=>Math.round(v*ratio);
+  const grid=document.getElementById('nutrition-grid');
+  if (grid) grid.innerHTML=[
+    {val:n(nut.calories),label:'kcal'},{val:n(nut.protein)+'g',label:'protein'},
+    {val:n(nut.carbs)+'g',label:'carbs'},{val:n(nut.fat)+'g',label:'fat'},
+  ].map(item=>`<div class="nut-card"><div class="nut-val">${item.val}</div><div class="nut-label">${item.label}</div></div>`).join('');
+}
+
+function renderSteps(steps) {
+  const list = document.getElementById('steps-list');
+  if (!list || !steps) return;
+  list.innerHTML = steps.length
+    ? steps.map(s => `<li class="step-item">${s}</li>`).join('')
+    : '<li style="color:var(--clr-muted);font-size:14px;list-style:none;padding:8px 0">No steps extracted yet.</li>';
+}
+
+async function reExtractCurrentRecipe() {
+  if (!state.currentRecipe || !state.currentRecipe.driveFileId) return;
+  showToast('Extracting recipe with AI…');
+
+  try {
+    // Re-download and extract PDF text
+    const text = await extractPDFText(state.currentRecipe.driveFileId);
+
+    // Re-run AI parse via Netlify function
+    const res = await fetch('/functions/claude', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        messages: [{
+          role: 'user',
+          content: `Extract this recipe and return ONLY valid JSON (no markdown):
+{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""],"nutrition":null}
+
+Recipe name: "${state.currentRecipe.name}"
+Cuisine: "${state.currentRecipe.cuisine}"
+PDF text: ${text || '(no text extracted — use your knowledge of this recipe name)'}
+
+IMPORTANT: If PDF text is missing or unhelpful, use your culinary knowledge to fill in typical ingredients and steps for "${state.currentRecipe.name}".`
+        }],
+      }),
+    });
+
+    const data   = await res.json();
+    const raw    = data.content.map(c => c.text || '').join('');
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+
+    // Update the current recipe in state
+    state.currentRecipe.ingredients = parsed.ingredients || [];
+    state.currentRecipe.steps       = parsed.steps       || [];
+    state.currentRecipe.nutrition   = parsed.nutrition   || null;
+    if (parsed.time && parsed.time !== '—') state.currentRecipe.time = parsed.time;
+    if (parsed.servings) { state.currentRecipe.servings = parsed.servings; state.baseServings = parsed.servings; state.currentServings = parsed.servings; }
+
+    // Update the recipe in state.recipes array too
+    const idx = state.recipes.findIndex(r => r.id === state.currentRecipe.id);
+    if (idx !== -1) state.recipes[idx] = { ...state.recipes[idx], ...state.currentRecipe };
+
+    // Update cache
+    const cache = getCachedRecipes();
+    cache['drive_' + state.currentRecipe.driveFileId] = state.currentRecipe;
+    saveCachedRecipes(cache);
+
+    // Re-render
+    renderIngredients();
+    renderSteps(state.currentRecipe.steps);
+    renderNutrition(state.currentRecipe.nutrition);
+    showToast('Recipe extracted ✓');
+
+  } catch(e) {
+    console.error('Re-extract failed:', e);
+    showToast('Extraction failed — try opening the PDF in Drive');
+  }
+}
+
+// ── IN-APP RECIPE VIEWER ──────────────────────────────────────────────────────
+async function saveCurrentRecipeToDrive() {
+  if (!state.currentRecipe) return;
+  if (!drive?.isSignedIn) { showToast('Sign in to Google Drive first'); navigate('settings'); return; }
+  const btn = document.getElementById('btn-save-drive');
+  if (btn) btn.textContent = '⏳ Saving…';
+  try {
+    const ok = await saveRecipeToDrive(state.currentRecipe);
+    if (ok) {
+      // Update the recipe to mark it as saved
+      state.currentRecipe.tags = (state.currentRecipe.tags||[]).filter(t => t !== 'Imported');
+      state.currentRecipe.tags.push('From Drive');
+      const idx = state.recipes.findIndex(r => r.id === state.currentRecipe.id);
+      if (idx !== -1) state.recipes[idx] = { ...state.currentRecipe };
+      if (btn) btn.classList.add('hidden');
+      const btnOpen = document.getElementById('btn-open-drive');
+      if (btnOpen) btnOpen.classList.remove('hidden');
+    }
+  } catch(e) {
+    showToast('Save failed: ' + e.message);
+    if (btn) btn.textContent = '☁️ Save to Google Drive';
+  }
+}
+
+function openInCloud() {
+  if (!state.currentRecipe) return;
+  const recipe=state.currentRecipe;
+
+  // If we have steps/ingredients already extracted, show them in-app
+  const hasContent=(recipe.steps&&recipe.steps.length>0&&recipe.steps[0]!=='Open the PDF in Google Drive to view the full recipe.')||
+                   (recipe.ingredients&&recipe.ingredients.length>0);
+
+  if (hasContent) {
+    // Content is already shown in the detail panel — scroll to steps
+    const stepsEl=document.getElementById('steps-section');
+    if (stepsEl) stepsEl.scrollIntoView({behavior:'smooth',block:'start'});
+    showToast('Recipe content shown above ↑');
+  } else if (recipe.cloudPath||recipe.driveFileId) {
+    // Fall back to opening in Drive if we couldn't extract content
+    const url=recipe.cloudPath||(recipe.driveFileId?'https://drive.google.com/file/d/'+recipe.driveFileId+'/view':null);
+    if (url) window.open(url,'_blank');
+  } else {
+    showToast('No content available for this recipe');
+  }
+}
+
+function addToPlannerFromDetail() {
+  if (!state.currentRecipe) return;
+  const el=document.getElementById('modal-recipe-name');
+  if (el) el.textContent=state.currentRecipe.name;
+  state.pendingRecipeForPlan=state.currentRecipe.id;
+  buildDayPicker(state.currentRecipe.id);
+  document.getElementById('add-to-day-modal')?.classList.remove('hidden');
+}
+
+// ── COOK MODE ─────────────────────────────────────────────────────────────────
+function startCookMode() {
+  if (!state.currentRecipe) return;
+  state.cookSteps=state.currentRecipe.steps||[];
+  state.cookStepIndex=0;
+  const cn=document.getElementById('cook-recipe-name');
+  if (cn) cn.textContent=state.currentRecipe.name;
+  document.getElementById('screen-cook')?.classList.remove('hidden');
+  renderCookStep();
+  if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+}
+
+function renderCookStep() {
+  const steps=state.cookSteps,idx=state.cookStepIndex,total=steps.length;
+  const txt=document.getElementById('cook-step-text');
+  const lbl=document.getElementById('progress-label');
+  const bar=document.getElementById('progress-fill');
+  const prev=document.getElementById('btn-prev-step');
+  const next=document.getElementById('btn-next-step');
+  if (txt) txt.textContent=steps[idx]||'';
+  if (lbl) lbl.textContent=`Step ${idx+1} of ${total}`;
+  if (bar) bar.style.width=((idx+1)/total*100)+'%';
+  if (prev) prev.disabled=idx===0;
+  if (next) next.textContent=idx===total-1?'✓ Done':'Next →';
+  if (state.voiceActive&&document.getElementById('voice-read')?.checked) speakStep(steps[idx]);
+}
+
+function changeStep(delta) {
+  const next=state.cookStepIndex+delta;
+  if (next<0) return;
+  if (next>=state.cookSteps.length){stopCookMode();return;}
+  state.cookStepIndex=next; renderCookStep();
+}
+
+function stopCookMode() {
+  if (state.voiceActive) stopVoice();
+  state.speechSynth?.cancel();
+  document.getElementById('screen-cook')?.classList.add('hidden');
+}
+
+// ── VOICE ─────────────────────────────────────────────────────────────────────
+function toggleVoice(){state.voiceActive?stopVoice():startVoice();}
+function startVoice(){
+  state.voiceActive=true;
+  const btn=document.getElementById('voice-toggle');
+  if(btn)btn.textContent='🎙️ Voice on';
+  document.getElementById('voice-hint')&&(document.getElementById('voice-hint').style.display='block');
+  if(document.getElementById('voice-read')?.checked) speakStep(state.cookSteps[state.cookStepIndex]);
+  if(document.getElementById('voice-listen')?.checked) startRecognition();
+}
+function stopVoice(){
+  state.voiceActive=false;
+  const btn=document.getElementById('voice-toggle');
+  if(btn)btn.textContent='🔇 Voice off';
+  document.getElementById('voice-hint')&&(document.getElementById('voice-hint').style.display='none');
+  state.speechSynth?.cancel();
+  try{state.speechRecog?.stop();}catch(e){}
+}
+function speakStep(text){
+  if(!state.speechSynth||!text)return;
+  state.speechSynth.cancel();
+  const utt=new SpeechSynthesisUtterance(text);
+  utt.rate=0.9;utt.pitch=1;
+  state.speechSynth.speak(utt);
+}
+function startRecognition(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR)return;
+  const r=new SR();r.continuous=true;r.interimResults=false;r.lang='en-US';
+  state.speechRecog=r;
+  r.onresult=e=>{
+    const t=e.results[e.results.length-1][0].transcript.toLowerCase().trim();
+    if(t.includes('next')||t.includes('continue'))changeStep(1);
+    else if(t.includes('back')||t.includes('previous'))changeStep(-1);
+    else if(t.includes('repeat')||t.includes('again'))speakStep(state.cookSteps[state.cookStepIndex]);
+    else if(t.includes('stop')||t.includes('exit'))stopCookMode();
+  };
+  r.onerror=e=>{if(e.error!=='no-speech')console.warn(e.error);};
+  r.onend=()=>{if(state.voiceActive)try{r.start();}catch(e){}};
+  try{r.start();}catch(e){}
+}
+
+// ── SHOPPING LIST ─────────────────────────────────────────────────────────────
+function addToShoppingList() {
+  if (!state.currentRecipe) {
+    showToast('Please open a recipe first');
+    return;
+  }
+  const recipe=state.currentRecipe;
+  const ratio=state.currentServings/state.baseServings;
+
+  if (!recipe.ingredients||recipe.ingredients.length===0) {
+    showToast('No ingredients found for this recipe');
+    return;
+  }
+
+  // Remove existing items from same recipe then re-add with current servings
+  state.shoppingItems=state.shoppingItems.filter(i=>i.recipeId!==recipe.id);
+  state.shoppingRecipes=state.shoppingRecipes.filter(n=>n!==recipe.name);
+
+  recipe.ingredients.forEach(ing=>{
+    state.shoppingItems.push({
+      id:Math.random().toString(36).slice(2),
+      recipeId:recipe.id,
+      recipeName:recipe.name,
+      text:scaleAmount(ing.amount||'',ratio)+' '+ing.item,
+      checked:false,
+    });
+  });
+
+  if(!state.shoppingRecipes.includes(recipe.name)) state.shoppingRecipes.push(recipe.name);
+  saveShoppingList();
+  updateShoppingBadge();
+  showToast('Added '+recipe.ingredients.length+' items to shopping list ✓');
+}
+
+function saveShoppingList(){
+  localStorage.setItem('rv_shopping',JSON.stringify(state.shoppingItems));
+  localStorage.setItem('rv_shopping_recipes',JSON.stringify(state.shoppingRecipes));
+}
+
+function updateShoppingBadge(){
+  const n=state.shoppingItems.filter(i=>!i.checked).length;
+  ['list-badge','list-badge-mobile'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.textContent=n;
+    el.classList.toggle('hidden',n===0);
+  });
+}
+
+function renderShopping(){
+  const emptyEl=document.getElementById('shopping-empty');
+  const contentEl=document.getElementById('shopping-content');
+  const sourceEl=document.getElementById('shopping-source-row');
+  const listEl=document.getElementById('shopping-list');
+  if(!listEl)return;
+  if(!state.shoppingItems.length){
+    emptyEl?.classList.remove('hidden');
+    contentEl?.classList.add('hidden');
+    return;
+  }
+  emptyEl?.classList.add('hidden');
+  contentEl?.classList.remove('hidden');
+  if(sourceEl)sourceEl.textContent='From: '+(state.shoppingRecipes.join(', ')||'—');
+  listEl.innerHTML=state.shoppingItems.map(item=>`
+    <li class="shopping-item${item.checked?' checked':''}" onclick="toggleShoppingItem('${item.id}')">
+      <div class="shopping-check"></div>
+      <div>
+        <div class="shopping-item-text">${item.text}</div>
+        <div class="shopping-item-recipe">${item.recipeName}</div>
+      </div>
+    </li>`).join('');
+}
+
+function toggleShoppingItem(id){
+  const item=state.shoppingItems.find(i=>i.id===id);
+  if(item)item.checked=!item.checked;
+  saveShoppingList();updateShoppingBadge();renderShopping();
+}
+
+function clearChecked(){
+  state.shoppingItems=state.shoppingItems.filter(i=>!i.checked);
+  const rem=new Set(state.shoppingItems.map(i=>i.recipeName));
+  state.shoppingRecipes=state.shoppingRecipes.filter(n=>rem.has(n));
+  saveShoppingList();updateShoppingBadge();renderShopping();
+}
+
+function exportShoppingList() {
+  if (!state.shoppingItems.length) { showToast('Nothing to export yet'); return; }
+
+  const lines = ['🛒 Shopping List — Recipe Vault', 'Recipes: ' + state.shoppingRecipes.join(', '), ''];
+  state.shoppingItems.filter(i => !i.checked).forEach(i => lines.push('☐ ' + i.text));
+  const checked = state.shoppingItems.filter(i => i.checked);
+  if (checked.length) { lines.push('', 'Already have:'); checked.forEach(i => lines.push('✓ ' + i.text)); }
+  const text = lines.join('\n');
+
+  const target = state.exportTarget;
+  // Detect if we're on a real mobile device (not desktop Chrome which has broken share)
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (target === 'share') {
+    if (isMobile && navigator.share) {
+      // Mobile: use native share sheet — works perfectly on Android
+      navigator.share({ title: '🛒 Shopping List', text })
+        .catch(err => { if (err.name !== 'AbortError') copyToClipboard(text); });
+    } else {
+      // Desktop: clipboard is more reliable than share sheet
+      copyToClipboard(text);
+    }
+    return;
+  }
+
+  if (target === 'keep') {
+    copyToClipboard(text, false);
+    showExportModal();
+    return;
+  }
+
+  // Default: clipboard
+  copyToClipboard(text);
+}
+
+function copyToClipboard(text, showMsg = true) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text)
+      .then(() => { if (showMsg) showToast('Shopping list copied to clipboard ✓'); })
+      .catch(() => fallbackCopy(text, showMsg));
+  } else {
+    fallbackCopy(text, showMsg);
+  }
+}
+
+function fallbackCopy(text, showMsg = true) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try { document.execCommand('copy'); if (showMsg) showToast('Copied ✓'); } catch(e) {}
+  document.body.removeChild(ta);
+}
+
+function showExportModal(text) {
+  // Create or reuse export modal
+  let modal = document.getElementById('export-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'export-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-card" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">📋</div>
+        <h3 class="modal-title">List copied!</h3>
+        <p class="modal-sub">Your shopping list is on your clipboard. Open Google Keep, create a new note, and tap <strong>Paste</strong>.</p>
+        <button class="btn-primary full-width" onclick="openKeepFromModal()">Open Google Keep</button>
+        <button class="btn-ghost full-width" style="margin-top:8px" onclick="closeModal('export-modal')">Done</button>
+      </div>`;
+    modal.onclick = e => { if (e.target === modal) modal.classList.add('hidden'); };
+    document.body.appendChild(modal);
+  }
+  modal.classList.remove('hidden');
+}
+
+function openKeepFromModal() {
+  closeModal('export-modal');
+  window.open('https://keep.google.com', '_blank');
+}
+
+// ── MEAL PLANNER ─────────────────────────────────────────────────────────────
+function getWeekDates(offset){
+  const now=new Date(),start=new Date(now);
+  start.setDate(now.getDate()-now.getDay()+1+offset*7);
+  return Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d;});
+}
+function shiftWeek(delta){state.weekOffset+=delta;renderPlannerWeek();}
+function renderPlannerWeek(){
+  const days=getWeekDates(state.weekOffset);
+  const labelEl=document.getElementById('week-label');
+  const container=document.getElementById('day-list');
+  if(!container)return;
+  if(labelEl){
+    if(state.weekOffset===0)labelEl.textContent='This week';
+    else if(state.weekOffset===1)labelEl.textContent='Next week';
+    else if(state.weekOffset===-1)labelEl.textContent='Last week';
+    else labelEl.textContent='Week of '+days[0].toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  }
+  const dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  container.innerHTML=days.map((d,i)=>{
+    const key=d.toISOString().slice(0,10);
+    const meals=state.plannerData[key]||[];
+    const today=d.toDateString()===new Date().toDateString();
+    return `<div class="day-card${today?' day-today':''}">
+      <div class="day-header">
+        <div class="day-name">${dayNames[i]}${today?' · Today':''}</div>
+        <div class="day-date">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+      </div>
+      <div class="day-meals">
+        ${meals.length===0?'<div class="day-empty">No meals planned</div>':
+          meals.map((m,mi)=>`<div class="day-meal-item">
+            <span class="day-meal-emoji">${m.emoji||'🍽️'}</span>
+            <span class="day-meal-name">${m.name}</span>
+            <button class="day-meal-remove" onclick="removeMealFromDay('${key}',${mi})">✕</button>
+          </div>`).join('')}
+      </div>
+      <button class="day-add-btn" onclick="openAddToDayModal('${key}')">+ Add recipe</button>
+    </div>`;
+  }).join('');
+}
+
+function openAddToDayModal(dateKey){
+  state.pendingDayKey=dateKey;state.pendingRecipeForPlan=null;
+  const el=document.getElementById('modal-recipe-name');if(el)el.textContent='this day';
+  buildDayPicker(null);
+  document.getElementById('add-to-day-modal')?.classList.remove('hidden');
+}
+function buildDayPicker(recipeId){
+  const picker=document.getElementById('day-picker');if(!picker)return;
+  const days=getWeekDates(state.weekOffset);
+  const dayNames=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const rId=recipeId||state.pendingRecipeForPlan;
+  if(rId){
+    picker.innerHTML=days.map((d,i)=>{
+      const key=d.toISOString().slice(0,10);
+      const count=(state.plannerData[key]||[]).length;
+      return `<button class="day-pick-btn" onclick="addMealToDay('${key}','${rId}')">
+        <span>${dayNames[i]} <span style="color:var(--clr-muted);font-size:12px">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span></span>
+        <span class="day-pick-count">${count} meal${count!==1?'s':''}</span>
+      </button>`;
+    }).join('');
+  } else {
+    picker.innerHTML=state.recipes.map(r=>`
+      <button class="day-pick-btn" onclick="addMealToDay('${state.pendingDayKey}','${r.id}')">
+        <span>${r.emoji||'🍽️'} ${r.name}</span>
+        <span class="day-pick-count">${r.cuisine}</span>
+      </button>`).join('');
+  }
+}
+function addMealToDay(dateKey,recipeId){
+  const recipe=state.recipes.find(r=>r.id===recipeId);if(!recipe)return;
+  if(!state.plannerData[dateKey])state.plannerData[dateKey]=[];
+  state.plannerData[dateKey].push({id:recipe.id,name:recipe.name,emoji:recipe.emoji||'🍽️'});
+  localStorage.setItem('rv_planner',JSON.stringify(state.plannerData));
+  closeModal('add-to-day-modal');renderPlannerWeek();
+  showToast(recipe.name+' added ✓');
+}
+function removeMealFromDay(dateKey,index){
+  if(!state.plannerData[dateKey])return;
+  state.plannerData[dateKey].splice(index,1);
+  localStorage.setItem('rv_planner',JSON.stringify(state.plannerData));
+  renderPlannerWeek();
+}
+function buildPlannerList(){document.getElementById('planner-list-modal')?.classList.remove('hidden');}
+function generatePlannerList(mode){
+  closeModal('planner-list-modal');
+  const days=getWeekDates(state.weekOffset);
+  const dayNames=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  state.shoppingItems=[];state.shoppingRecipes=[];
+  if(mode==='combined'){
+    const ids=new Set();
+    days.forEach(d=>(state.plannerData[d.toISOString().slice(0,10)]||[]).forEach(m=>ids.add(m.id)));
+    if(!ids.size){showToast('No meals planned this week');return;}
+    ids.forEach(id=>{
+      const r=state.recipes.find(r=>r.id===id);if(!r)return;
+      (r.ingredients||[]).forEach(ing=>state.shoppingItems.push({id:Math.random().toString(36).slice(2),recipeId:r.id,recipeName:r.name,text:(ing.amount||'')+' '+ing.item,checked:false}));
+      state.shoppingRecipes.push(r.name);
+    });
+  } else {
+    days.forEach((d,i)=>{
+      (state.plannerData[d.toISOString().slice(0,10)]||[]).forEach(m=>{
+        const r=state.recipes.find(r=>r.id===m.id);if(!r)return;
+        (r.ingredients||[]).forEach(ing=>state.shoppingItems.push({id:Math.random().toString(36).slice(2),recipeId:r.id,recipeName:dayNames[i]+': '+r.name,text:(ing.amount||'')+' '+ing.item,checked:false}));
+        if(!state.shoppingRecipes.includes(r.name))state.shoppingRecipes.push(r.name);
+      });
+    });
+  }
+  saveShoppingList();updateShoppingBadge();navigate('shopping');
+  showToast('Shopping list ready ✓');
+}
+
+// ── IMPORT — uses Netlify function proxy (no CORS issues) ────────────────────
+async function extractRecipe() {
+  const urlInput = document.getElementById('import-url');
+  const url = urlInput?.value.trim();
+  if (!url) { urlInput?.focus(); showToast('Please enter a URL'); return; }
+
+  document.getElementById('import-loading')?.classList.remove('hidden');
+  document.getElementById('import-error')?.classList.add('hidden');
+  document.getElementById('import-preview')?.classList.add('hidden');
+  const btn = document.getElementById('btn-extract');
+  if (btn) btn.disabled = true;
+
+  try {
+    // Step 1: fetch the page content via our server-side proxy
+    let pageContent = '';
+    try {
+      const fetchRes = await fetch('/functions/fetch-page', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ url }),
+      });
+      if (fetchRes.ok) {
+        const fetchData = await fetchRes.json();
+        pageContent = fetchData.text || '';
+      }
+    } catch(e) {
+      console.warn('Page fetch failed, proceeding with URL only:', e);
+    }
+
+    // Step 2: ask Claude to extract the recipe via our server-side proxy
+    const prompt = pageContent
+      ? `Extract the recipe from this webpage content. Return ONLY valid JSON, no markdown, no explanation:
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+URL: ${url}
+Page content: ${pageContent}`
+      : `Extract or guess the recipe from this URL. Return ONLY valid JSON, no markdown, no explanation:
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+URL: ${url}`;
+
+    const claudeRes = await fetch('/functions/claude', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        model:      'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        messages:   [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!claudeRes.ok) throw new Error('AI service error: ' + claudeRes.status);
+    const claudeData = await claudeRes.json();
+    const text = claudeData.content.map(c => c.text || '').join('');
+    const recipe = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+    document.getElementById('imp-name')        && (document.getElementById('imp-name').value         = recipe.name     || '');
+    document.getElementById('imp-cuisine')     && (document.getElementById('imp-cuisine').value      = recipe.cuisine  || '');
+    document.getElementById('imp-time')        && (document.getElementById('imp-time').value         = recipe.time     || '');
+    document.getElementById('imp-servings')    && (document.getElementById('imp-servings').value     = recipe.servings || 4);
+    document.getElementById('imp-ingredients') && (document.getElementById('imp-ingredients').value  = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n'));
+    document.getElementById('imp-steps')       && (document.getElementById('imp-steps').value        = (recipe.steps||[]).join('\n'));
+    document.getElementById('import-preview')?.classList.remove('hidden');
+    showToast('Recipe extracted ✓ — review and save');
+
+  } catch(err) {
+    console.error('Import error:', err);
+    const el = document.getElementById('import-error');
+    if (el) {
+      el.textContent = 'AI extraction failed (' + err.message + '). You can fill in the recipe details manually below.';
+      el.classList.remove('hidden');
+    }
+    // Show empty form so user can type manually
+    ['imp-name','imp-cuisine','imp-time','imp-ingredients','imp-steps'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.value) el.value = '';
+    });
+    document.getElementById('import-preview')?.classList.remove('hidden');
+  } finally {
+    document.getElementById('import-loading')?.classList.add('hidden');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function saveImportedRecipe() {
+  const name    = (document.getElementById('imp-name')?.value    || '').trim();
+  const cuisine = (document.getElementById('imp-cuisine')?.value || '').trim() || 'Other';
+  const time    = (document.getElementById('imp-time')?.value    || '').trim();
+  const servings= parseInt(document.getElementById('imp-servings')?.value || '4') || 4;
+  const ings    = (document.getElementById('imp-ingredients')?.value || '').trim().split('\n').filter(Boolean);
+  const steps   = (document.getElementById('imp-steps')?.value   || '').trim().split('\n').filter(Boolean);
+
+  if (!name) { document.getElementById('imp-name')?.focus(); showToast('Please enter a recipe name'); return; }
+
+  const newRecipe = {
+    id: 'imported_' + Date.now(), name, cuisine, emoji: guessEmoji(cuisine),
+    time: time || 'Unknown', servings,
+    cloudPath: '', tags: ['Imported'],
+    ingredients: ings.map(line => {
+      const m = line.match(/^([\d.\/]+\s*(?:g|kg|ml|l|tsp|tbsp|cup|oz|lb|cloves?|bunch|pinch|large|medium|small|handful)?)\s+(.*)/i);
+      return m ? { amount: m[1].trim(), item: m[2].trim() } : { amount: '', item: line };
+    }),
+    steps, nutrition: null,
+  };
+
+  // Add to local list immediately
+  state.recipes.unshift(newRecipe);
+  buildCuisineChips(); applyFilters();
+  resetImport(); navigate('recipes');
+
+  // Save to Drive if signed in
+  if (typeof saveRecipeToDrive === 'function' && typeof drive !== 'undefined' && drive.isSignedIn) {
+    showToast('Saving "' + name + '" to Google Drive…');
+    try {
+      const ok = await saveRecipeToDrive(newRecipe);
+      if (ok) {
+        showToast('"' + name + '" saved to Drive ✓');
+        // Also clear the recipe cache so next sync picks it up
+        const cache = getCachedRecipes();
+        saveCachedRecipes(cache);
+      }
+    } catch(e) {
+      showToast('Saved locally — Drive sync failed. Try syncing manually.');
+      console.error('Drive save error:', e);
+    }
+  } else if (!drive?.isSignedIn) {
+    showToast('"' + name + '" saved. Sign in to Drive to sync it.');
+  }
+}
+
+function guessEmoji(cuisine){
+  const map={italian:'🍝',mexican:'🌮',japanese:'🍣',chinese:'🥢',indian:'🍛',french:'🥐',thai:'🍜',vietnamese:'🍜',american:'🍔',greek:'🫒',spanish:'🥘',korean:'🍱',bread:'🍞',dessert:'🍰',soup:'🍲',salad:'🥗',seafood:'🐟'};
+  return map[(cuisine||'').toLowerCase()]||'🍽️';
+}
+
+function resetImport(){
+  const url=document.getElementById('import-url');if(url)url.value='';
+  document.getElementById('import-preview')?.classList.add('hidden');
+  document.getElementById('import-error')?.classList.add('hidden');
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+function resync(){
+  if(typeof syncFromDrive==='function'&&typeof drive!=='undefined'&&drive.isSignedIn){
+    syncFromDrive();
+  } else {
+    showToast('Sign in to Google Drive first');
+    navigate('settings');
+  }
+}
+function connectCloud(){}
+function switchCloud(){}
+function updateSettingsCloud(){renderSettings();}
+function updateSettingsStats(){renderSettings();}
+
+// ── MODALS ────────────────────────────────────────────────────────────────────
+function closeModal(id){document.getElementById(id)?.classList.add('hidden');}
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))e.target.classList.add('hidden');});
+
+// ── TOAST ─────────────────────────────────────────────────────────────────────
+function showToast(msg){
+  let t=document.getElementById('rv-toast');
+  if(!t){
+    t=document.createElement('div');t.id='rv-toast';
+    Object.assign(t.style,{
+      position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',
+      background:'var(--clr-ink)',color:'var(--clr-paper)',
+      padding:'10px 22px',borderRadius:'24px',fontSize:'14px',fontWeight:'500',
+      zIndex:'9999',whiteSpace:'nowrap',transition:'opacity .3s',
+      fontFamily:'var(--font-ui)',boxShadow:'0 4px 20px rgba(0,0,0,.3)',
+      pointerEvents:'none',maxWidth:'90vw',textAlign:'center',
+    });
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>{t.style.opacity='0';},2800);
+}

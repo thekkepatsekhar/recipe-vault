@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recipe Vault — Debug</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #f0f0f0; }
+    .ok  { color: green; font-weight: bold; }
+    .err { color: red;   font-weight: bold; }
+    .box { background: white; border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    h2   { margin: 0 0 10px; font-size: 15px; }
+    pre  { font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 4px 0; }
+  </style>
+</head>
+<body>
+<h1 style="font-size:18px;margin-bottom:16px">🔧 Recipe Vault Debug Page</h1>
+
+<div class="box" id="box-scripts">
+  <h2>1. Script loading</h2>
+  <div id="out-scripts">Loading…</div>
+</div>
+
+<div class="box" id="box-errors">
+  <h2>2. JavaScript errors</h2>
+  <div id="out-errors">None so far…</div>
+</div>
+
+<div class="box" id="box-functions">
+  <h2>3. Key functions defined?</h2>
+  <div id="out-functions">Checking…</div>
+</div>
+
+<div class="box" id="box-navigate">
+  <h2>4. Navigate to settings test</h2>
+  <div id="out-navigate">Not tested yet</div>
+  <button onclick="testNavigate()" style="margin-top:8px;padding:8px 16px;cursor:pointer">Test navigate('settings')</button>
+</div>
+
+<div class="box">
+  <h2>5. Settings screen HTML</h2>
+  <div id="out-html" style="font-size:11px;max-height:200px;overflow:auto">Not loaded</div>
+</div>
+
+<script>
+  // Catch all errors
+  const errors = [];
+  window.onerror = (msg, src, line, col, err) => {
+    errors.push({ msg, src: src?.split('/').pop(), line, col });
+    renderErrors();
+    return false;
+  };
+  window.addEventListener('unhandledrejection', e => {
+    errors.push({ msg: 'Unhandled promise: ' + e.reason, src: '', line: '', col: '' });
+    renderErrors();
+  });
+
+  function renderErrors() {
+    const el = document.getElementById('out-errors');
+    if (!errors.length) { el.innerHTML = '<span class="ok">✓ No errors</span>'; return; }
+    el.innerHTML = errors.map(e =>
+      `<pre class="err">❌ ${e.msg}\n   ${e.src}:${e.line}:${e.col}</pre>`
+    ).join('');
+  }
+</script>
+
+<!-- Load the actual app scripts in order -->
+<script>
+  document.getElementById('out-scripts').innerHTML = 'Loading data.js…';
+</script>
+<script src="js/data.js" onerror="document.getElementById('out-scripts').innerHTML+='<pre class=err>❌ data.js failed to load</pre>'"></script>
+<script>
+  document.getElementById('out-scripts').innerHTML += '<pre class=ok>✓ data.js loaded</pre>';
+</script>
+<script src="js/theme.js" onerror="document.getElementById('out-scripts').innerHTML+='<pre class=err>❌ theme.js failed to load</pre>'"></script>
+<script>
+  document.getElementById('out-scripts').innerHTML += '<pre class=ok>✓ theme.js loaded</pre>';
+</script>
+<script src="js/drive.js" onerror="document.getElementById('out-scripts').innerHTML+='<pre class=err>❌ drive.js failed to load</pre>'"></script>
+<script>
+  document.getElementById('out-scripts').innerHTML += '<pre class=ok>✓ drive.js loaded</pre>';
+</script>
+<script src="js/app.js" onerror="document.getElementById('out-scripts').innerHTML+='<pre class=err>❌ app.js failed to load</pre>'"></script>
+<script>
+  document.getElementById('out-scripts').innerHTML += '<pre class=ok>✓ app.js loaded</pre>';
+</script>
+
+<script>
+  // Check functions
+  const fns = ['navigate','renderSettings','buildThemeEditor','showToast',
+                'signInWithGoogle','signOutGoogle','initGoogleAuth',
+                'syncFromDrive','bootApp','applyTheme','loadSavedTheme'];
+  const fnOut = fns.map(f =>
+    typeof window[f] === 'function'
+      ? `<pre class="ok">✓ ${f}</pre>`
+      : `<pre class="err">❌ ${f} — NOT DEFINED</pre>`
+  ).join('');
+  document.getElementById('out-functions').innerHTML = fnOut;
+
+  // Show settings HTML
+  fetch('index.html')
+    .then(r => r.text())
+    .then(html => {
+      const match = html.match(/id="screen-settings"[\s\S]*?<\/section>/);
+      if (match) {
+        document.getElementById('out-html').textContent = match[0].slice(0, 2000);
+      } else {
+        document.getElementById('out-html').textContent = 'Could not find screen-settings section';
+      }
+    }).catch(e => {
+      document.getElementById('out-html').textContent = 'Could not load index.html: ' + e;
+    });
+
+  // Test navigate
+  window.testNavigate = function() {
+    const out = document.getElementById('out-navigate');
+    try {
+      if (typeof navigate !== 'function') {
+        out.innerHTML = '<span class="err">❌ navigate() is not defined</span>';
+        return;
+      }
+      // Check if screen element exists
+      const el = document.getElementById('screen-settings');
+      if (!el) {
+        out.innerHTML = '<span class="err">❌ #screen-settings element does not exist in DOM</span>';
+        return;
+      }
+      out.innerHTML = `<span class="ok">✓ #screen-settings found. Classes before: "${el.className}"</span>`;
+      navigate('settings');
+      out.innerHTML += `<pre class="ok">✓ navigate called. Classes after: "${el.className}"</pre>`;
+      const style = window.getComputedStyle(el);
+      out.innerHTML += `<pre>display: ${style.display}, visibility: ${style.visibility}, height: ${style.height}</pre>`;
+      const children = el.querySelectorAll('*').length;
+      out.innerHTML += `<pre>Child elements inside settings screen: ${children}</pre>`;
+    } catch(e) {
+      out.innerHTML = `<span class="err">❌ Error: ${e.message}</span><pre>${e.stack}</pre>`;
+    }
+  };
+
+  renderErrors();
+</script>
+</body>
+</html>
