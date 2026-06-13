@@ -47,6 +47,12 @@ function bootApp() {
   if (fp) { fp.value = state.folderPath; fp.addEventListener('change', () => { state.folderPath = fp.value.trim().replace(/^\//,''); localStorage.setItem('rv_folder', state.folderPath); }); }
   const exp = document.getElementById('export-target');
   if (exp) { exp.value = state.exportTarget; exp.addEventListener('change', () => { state.exportTarget = exp.value; localStorage.setItem('rv_export', exp.value); }); }
+  // Load saved Anthropic key into settings field
+  const keyField = document.getElementById('anthropic-key');
+  if (keyField) {
+    keyField.value = localStorage.getItem('rv_anthropic_key') || '';
+  }
+
   initGoogleAuth();
 }
 
@@ -74,6 +80,8 @@ function renderSettings() {
   if (rc) rc.textContent = state.recipes.length + ' recipes';
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
   if (typeof buildThemeEditor === 'function') buildThemeEditor();
+  const keyField = document.getElementById('anthropic-key');
+  if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -286,15 +294,9 @@ async function reExtractCurrentRecipe() {
     const text = await extractPDFText(state.currentRecipe.driveFileId);
 
     // Re-run AI parse via Netlify function
-    const res = await fetch('/functions/claude', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: `Extract this recipe and return ONLY valid JSON (no markdown):
+    const raw = await callClaude([{
+      role: 'user',
+      content: `Extract this recipe and return ONLY valid JSON (no markdown):
 {"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""],"nutrition":null}
 
 Recipe name: "${state.currentRecipe.name}"
@@ -302,12 +304,7 @@ Cuisine: "${state.currentRecipe.cuisine}"
 PDF text: ${text || '(no text extracted — use your knowledge of this recipe name)'}
 
 IMPORTANT: If PDF text is missing or unhelpful, use your culinary knowledge to fill in typical ingredients and steps for "${state.currentRecipe.name}".`
-        }],
-      }),
-    });
-
-    const data   = await res.json();
-    const raw    = data.content.map(c => c.text || '').join('');
+    }]);
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
 
     // Update the current recipe in state
@@ -769,15 +766,7 @@ async function extractRecipe() {
     // Step 1: fetch the page content via our server-side proxy
     let pageContent = '';
     try {
-      const fetchRes = await fetch('/functions/fetch-page', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ url }),
-      });
-      if (fetchRes.ok) {
-        const fetchData = await fetchRes.json();
-        pageContent = fetchData.text || '';
-      }
+      pageContent = await fetchPageContent(url);
     } catch(e) {
       console.warn('Page fetch failed, proceeding with URL only:', e);
     }
@@ -792,19 +781,7 @@ Page content: ${pageContent}`
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 URL: ${url}`;
 
-    const claudeRes = await fetch('/functions/claude', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({
-        model:      'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        messages:   [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!claudeRes.ok) throw new Error('AI service error: ' + claudeRes.status);
-    const claudeData = await claudeRes.json();
-    const text = claudeData.content.map(c => c.text || '').join('');
+    const text = await callClaude([{ role: 'user', content: prompt }]);
     const recipe = JSON.parse(text.replace(/```json|```/g, '').trim());
 
     document.getElementById('imp-name')        && (document.getElementById('imp-name').value         = recipe.name     || '');
@@ -901,6 +878,16 @@ function resync(){
     navigate('settings');
   }
 }
+function saveAnthropicKey() {
+  const field = document.getElementById('anthropic-key');
+  if (!field) return;
+  const key = field.value.trim();
+  if (!key) { showToast('Please enter your API key'); return; }
+  if (!key.startsWith('sk-ant-')) { showToast('Key should start with sk-ant-'); return; }
+  localStorage.setItem('rv_anthropic_key', key);
+  showToast('API key saved ✓ — AI features now active');
+}
+
 function connectCloud(){}
 function switchCloud(){}
 function updateSettingsCloud(){renderSettings();}

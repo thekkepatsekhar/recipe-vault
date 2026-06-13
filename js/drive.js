@@ -424,15 +424,9 @@ async function aiParseRecipe(text, file) {
   }
 
   try {
-    const res = await fetch('/functions/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1500,
-        messages: [{
-          role: 'user',
-          content: `You are extracting a recipe from PDF text. The text may be messy or jumbled due to PDF extraction — do your best to find the recipe information.
+    const raw = await callClaude([{
+      role: 'user',
+      content: `You are extracting a recipe from PDF text. The text may be messy or jumbled due to PDF extraction — do your best to find the recipe information.
 
 Recipe name from filename: "${name}"
 Cuisine folder: "${file.cuisine || 'Unknown'}"
@@ -455,13 +449,7 @@ IMPORTANT:
 - If you cannot find steps, use your knowledge of "${name}" to suggest typical steps  
 - nutrition can be null if not mentioned
 - Always return valid JSON even if you have to guess based on the recipe name`
-        }],
-      }),
-    });
-
-    if (!res.ok) throw new Error('Function error ' + res.status);
-    const data   = await res.json();
-    const raw    = data.content.map(c => c.text || '').join('');
+    }]);
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
 
     return {

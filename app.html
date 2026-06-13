@@ -259,7 +259,20 @@
             </div>
           </div>
           <div class="settings-group">
-            <div class="settings-label">Voice cooking mode</div>
+            <div class="settings-label">AI features (recipe import &amp; extraction)</div>
+            <div class="settings-row">
+              <span class="settings-row-label">Anthropic API key</span>
+            </div>
+            <div style="padding:0 16px 14px">
+              <input class="settings-input" id="anthropic-key" type="password"
+                placeholder="sk-ant-..." style="width:100%;text-align:left"
+                value="" />
+              <div style="font-size:12px;color:var(--clr-muted);margin-top:6px;line-height:1.5">
+                Get a free key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>. Stored only on your device.
+              </div>
+              <button class="btn-primary" style="margin-top:10px;padding:9px 20px;font-size:13px" onclick="saveAnthropicKey()">Save key</button>
+            </div>
+          </div>
             <div class="settings-row">
               <span class="settings-row-label">Read steps aloud</span>
               <label class="toggle"><input type="checkbox" id="voice-read" checked /><span class="toggle-track"></span></label>
@@ -328,6 +341,7 @@
 </div>
 
 <script src="js/data.js"></script>
+<script src="js/api.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/app.js"></script>
