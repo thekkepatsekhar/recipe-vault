@@ -238,13 +238,13 @@ async function syncFromDrive() {
     // Collect all PDF/text files
     const allFiles = [];
     const rootFiles = await listFiles(
-      `'${rootFolder.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain')`
+      `'${rootFolder.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain' or mimeType='application/vnd.google-apps.document')`
     );
     rootFiles.forEach(f => allFiles.push({ ...f, cuisine: 'Other' }));
 
     for (const sub of subfolders) {
       const files = await listFiles(
-        `'${sub.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain')`
+        `'${sub.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain' or mimeType='application/vnd.google-apps.document')`
       );
       files.forEach(f => allFiles.push({ ...f, cuisine: sub.name }));
     }
@@ -303,12 +303,10 @@ async function syncFromDrive() {
 async function fileToRecipe(file) {
   let text = '';
   try {
-    if (file.mimeType === 'application/pdf') {
-      text = await extractPDFText(file.id);
-    } else {
-      text = await gfetchText(
-        'https://www.googleapis.com/drive/v3/files/' + file.id + '?alt=media'
-      );
+    if (file.mimeType === 'application/pdf' ||
+        file.mimeType === 'text/plain' ||
+        file.mimeType === 'application/vnd.google-apps.document') {
+      text = await extractPDFText(file.id, file.mimeType);
     }
   } catch(e) { text = ''; }
 
@@ -317,19 +315,34 @@ async function fileToRecipe(file) {
   return await aiParseRecipe(text, file);
 }
 
-async function extractPDFText(fileId) {
-  // For uploaded PDFs we need to download the raw file and extract text
-  // Drive's export endpoint only works for Google Docs, not uploaded PDFs
+async function extractPDFText(fileId, mimeType) {
+  // Google Docs — export as plain text directly
+  if (mimeType === 'application/vnd.google-apps.document') {
+    try {
+      return await gfetchText(
+        'https://www.googleapis.com/drive/v3/files/' + fileId + '/export?mimeType=text/plain'
+      );
+    } catch(e) { return ''; }
+  }
+
+  // Plain text files — download directly
+  if (mimeType === 'text/plain') {
+    try {
+      return await gfetchText(
+        'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media'
+      );
+    } catch(e) { return ''; }
+  }
+
+  // PDFs — download and extract text from binary
   try {
     const res = await fetch(
       'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
       { headers: { 'Authorization': 'Bearer ' + drive.accessToken } }
     );
     if (!res.ok) throw new Error('Download failed: ' + res.status);
-
     const arrayBuffer = await res.arrayBuffer();
-    const text = extractTextFromPDFBuffer(arrayBuffer);
-    return text;
+    return extractTextFromPDFBuffer(arrayBuffer);
   } catch(e) {
     console.warn('PDF download failed:', e);
     return '';
@@ -501,56 +514,36 @@ async function saveRecipeToDrive(recipe) {
   }
 
   try {
-    // Step 1: Verify token with minimal API call
-    showToast('Checking Drive connection…');
+    // Verify token
     const aboutRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
       headers: { 'Authorization': 'Bearer ' + drive.accessToken }
     });
     if (!aboutRes.ok) {
-      const aboutErr = await aboutRes.json().catch(()=>({}));
-      throw new Error('Token check failed ' + aboutRes.status + ': ' + (aboutErr.error?.message || aboutRes.statusText));
+      const err = await aboutRes.json().catch(()=>({}));
+      throw new Error('Auth failed ' + aboutRes.status + ': ' + (err.error?.message || aboutRes.statusText));
     }
-    const aboutData = await aboutRes.json();
-    console.log('Authenticated as:', aboutData.user?.emailAddress);
 
-    // Step 2: Find Recipes folder
-    showToast('Finding Recipes folder…');
-    const rootName = (drive.folderPath || 'Recipes').replace(/^\//, '');
+    // Find or create Recipes root folder
+    const rootName  = (drive.folderPath || 'Recipes').replace(/^\//, '');
     const searchRes = await fetch(
       'https://www.googleapis.com/drive/v3/files?q=' +
       encodeURIComponent(`name='${rootName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`) +
       '&fields=files(id,name)&pageSize=5',
       { headers: { 'Authorization': 'Bearer ' + drive.accessToken } }
     );
-    if (!searchRes.ok) {
-      const searchErr = await searchRes.json().catch(()=>({}));
-      throw new Error('Folder search failed ' + searchRes.status + ': ' + (searchErr.error?.message || searchRes.statusText));
-    }
-    const searchData = await searchRes.json();
-    console.log('Folder search result:', searchData);
-
-    let rootFolder = searchData.files?.[0] || null;
+    const searchData  = await searchRes.json();
+    let   rootFolder  = searchData.files?.[0] || null;
     if (!rootFolder) {
-      // Create Recipes folder
-      showToast('Creating Recipes folder…');
-      const createRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+      const cr = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
         method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + drive.accessToken,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: rootName, mimeType: 'application/vnd.google-apps.folder' }),
       });
-      if (!createRes.ok) {
-        const createErr = await createRes.json().catch(()=>({}));
-        throw new Error('Create folder failed ' + createRes.status + ': ' + (createErr.error?.message || createRes.statusText));
-      }
-      rootFolder = await createRes.json();
-      console.log('Created root folder:', rootFolder);
+      if (!cr.ok) { const e=await cr.json().catch(()=>({})); throw new Error('Create folder failed ' + cr.status + ': ' + (e.error?.message||cr.statusText)); }
+      rootFolder = await cr.json();
     }
 
-    // Step 3: Find or create cuisine subfolder
-    showToast('Finding cuisine folder…');
+    // Find or create cuisine subfolder
     const subRes = await fetch(
       'https://www.googleapis.com/drive/v3/files?q=' +
       encodeURIComponent(`name='${recipe.cuisine}' and '${rootFolder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`) +
@@ -559,46 +552,56 @@ async function saveRecipeToDrive(recipe) {
     );
     let cuisineFolder = (await subRes.json()).files?.[0] || null;
     if (!cuisineFolder) {
-      const subCreateRes = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+      const cr = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: recipe.cuisine, mimeType: 'application/vnd.google-apps.folder', parents: [rootFolder.id] }),
       });
-      if (!subCreateRes.ok) {
-        const subErr = await subCreateRes.json().catch(()=>({}));
-        throw new Error('Create cuisine folder failed ' + subCreateRes.status + ': ' + (subErr.error?.message || subCreateRes.statusText));
-      }
-      cuisineFolder = await subCreateRes.json();
+      if (!cr.ok) { const e=await cr.json().catch(()=>({})); throw new Error('Create cuisine folder failed ' + cr.status + ': ' + (e.error?.message||cr.statusText)); }
+      cuisineFolder = await cr.json();
     }
-    console.log('Cuisine folder:', cuisineFolder);
 
-    // Step 4: Create the file
-    showToast('Saving file to Drive…');
-    const content  = buildRecipeText(recipe);
-    const fileName = recipe.name.replace(/[/\\?%*:|"<>]/g, '-') + '.txt';
+    const fileName = recipe.name.replace(/[/\\?%*:|"<>]/g, '-') + '.pdf';
 
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify({
-      name: fileName, parents: [cuisineFolder.id], mimeType: 'text/plain'
-    })], { type: 'application/json' }));
-    form.append('file', new Blob([content], { type: 'text/plain' }));
+    // Generate PDF using jsPDF
+    const pdfBytes = await generateRecipePDF(recipe);
+    if (!pdfBytes) throw new Error('Could not generate PDF');
 
-    const fileRes = await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
-      {
-        method:  'POST',
-        headers: { 'Authorization': 'Bearer ' + drive.accessToken },
-        body:    form,
-      }
+    // Check if file already exists
+    const existsRes = await fetch(
+      'https://www.googleapis.com/drive/v3/files?q=' +
+      encodeURIComponent(`name='${fileName}' and '${cuisineFolder.id}' in parents and trashed=false`) +
+      '&fields=files(id)&pageSize=1',
+      { headers: { 'Authorization': 'Bearer ' + drive.accessToken } }
     );
+    const existsData = await existsRes.json();
+    const existing   = existsData.files?.[0] || null;
 
-    if (!fileRes.ok) {
-      const fileErr = await fileRes.json().catch(()=>({}));
-      throw new Error('File upload failed ' + fileRes.status + ': ' + (fileErr.error?.message || fileRes.statusText));
+    let fileData;
+    if (existing) {
+      // Update existing PDF
+      const ur = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files/' + existing.id + '?uploadType=media&fields=id,name,webViewLink',
+        { method: 'PATCH', headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'application/pdf' }, body: pdfBytes }
+      );
+      if (!ur.ok) { const e=await ur.json().catch(()=>({})); throw new Error('Update failed ' + ur.status + ': ' + (e.error?.message||ur.statusText)); }
+      fileData = { id: existing.id };
+    } else {
+      // Create new PDF file
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({
+        name:    fileName,
+        parents: [cuisineFolder.id],
+        mimeType:'application/pdf',
+      })], { type: 'application/json' }));
+      form.append('file', new Blob([pdfBytes], { type: 'application/pdf' }));
+      const fr = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+        { method: 'POST', headers: { 'Authorization': 'Bearer ' + drive.accessToken }, body: form }
+      );
+      if (!fr.ok) { const e=await fr.json().catch(()=>({})); throw new Error('Upload failed ' + fr.status + ': ' + (e.error?.message||fr.statusText)); }
+      fileData = await fr.json();
     }
-
-    const fileData = await fileRes.json();
-    console.log('File saved:', fileData);
 
     recipe.driveFileId = fileData.id;
     recipe.cloudPath   = fileData.webViewLink || 'https://drive.google.com/file/d/' + fileData.id + '/view';
@@ -607,9 +610,125 @@ async function saveRecipeToDrive(recipe) {
     return true;
 
   } catch(e) {
-    console.error('Save to Drive failed:', e);
+    console.error('Drive save failed:', e);
     showToast('Drive save failed: ' + e.message);
     return false;
+  }
+}
+
+// ── PDF GENERATION ────────────────────────────────────────────────────────────
+async function loadJsPDF() {
+  if (window.jspdf) return window.jspdf.jsPDF;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => resolve(window.jspdf.jsPDF);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+async function generateRecipePDF(recipe) {
+  try {
+    const jsPDF = await loadJsPDF();
+    const doc   = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const colW   = pageW - margin * 2;
+    let   y      = margin;
+
+    const checkY = (needed = 8) => { if (y + needed > pageH - margin) { doc.addPage(); y = margin; } };
+
+    // Header bar
+    doc.setFillColor(14, 53, 40);
+    doc.rect(0, 0, pageW, 28, 'F');
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(255,255,255);
+    doc.text(recipe.name, margin, 13);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(200,230,216);
+    doc.text([recipe.cuisine, recipe.time, (recipe.servings||2)+' servings'].filter(Boolean).join('  ·  '), margin, 21);
+    y = 36;
+    doc.setTextColor(20,20,20);
+
+    // Tags
+    if (recipe.tags && recipe.tags.length) {
+      doc.setFontSize(9); doc.setFont('helvetica','italic'); doc.setTextColor(130,130,130);
+      doc.text(recipe.tags.join('  ·  '), margin, y); y += 8;
+    }
+
+    // Ingredients
+    if (recipe.ingredients && recipe.ingredients.length) {
+      checkY(12);
+      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(14,53,40);
+      doc.text('Ingredients', margin, y); y += 2;
+      doc.setDrawColor(14,53,40); doc.setLineWidth(0.5); doc.line(margin, y, margin+colW, y); y += 6;
+      recipe.ingredients.forEach(ing => {
+        checkY(7);
+        if (ing.amount) {
+          doc.setFont('helvetica','bold'); doc.setTextColor(232,98,58); doc.setFontSize(10);
+          doc.text(ing.amount, margin, y);
+          const aw = doc.getTextWidth(ing.amount) + 3;
+          doc.setFont('helvetica','normal'); doc.setTextColor(20,20,20);
+          const lines = doc.splitTextToSize(ing.item, colW - aw - 2);
+          doc.text(lines, margin + aw, y); y += lines.length * 5.5;
+        } else {
+          doc.setFont('helvetica','normal'); doc.setTextColor(20,20,20); doc.setFontSize(10);
+          const lines = doc.splitTextToSize(ing.item, colW);
+          doc.text(lines, margin, y); y += lines.length * 5.5;
+        }
+      });
+      y += 5;
+    }
+
+    // Method
+    if (recipe.steps && recipe.steps.length) {
+      checkY(12);
+      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(14,53,40);
+      doc.text('Method', margin, y); y += 2;
+      doc.setDrawColor(14,53,40); doc.line(margin, y, margin+colW, y); y += 6;
+      recipe.steps.forEach((step, i) => {
+        checkY(12);
+        doc.setFillColor(232,98,58); doc.circle(margin+3, y-1.5, 3, 'F');
+        doc.setTextColor(255,255,255); doc.setFontSize(7);
+        doc.text(String(i+1), margin+3, y-0.5, {align:'center'});
+        doc.setTextColor(20,20,20); doc.setFontSize(10); doc.setFont('helvetica','normal');
+        const lines = doc.splitTextToSize(step, colW-10);
+        doc.text(lines, margin+9, y); y += lines.length * 5.5 + 3;
+      });
+      y += 2;
+    }
+
+    // Nutrition
+    if (recipe.nutrition) {
+      checkY(26);
+      doc.setFontSize(12); doc.setFont('helvetica','bold'); doc.setTextColor(14,53,40);
+      doc.text('Nutrition per serving', margin, y); y += 2;
+      doc.setDrawColor(14,53,40); doc.line(margin, y, margin+colW, y); y += 6;
+      const nuts = [{label:'Calories',val:recipe.nutrition.calories+' kcal'},{label:'Protein',val:recipe.nutrition.protein+'g'},{label:'Carbs',val:recipe.nutrition.carbs+'g'},{label:'Fat',val:recipe.nutrition.fat+'g'}];
+      const bw = (colW-9)/4;
+      nuts.forEach((n,i) => {
+        const x=margin+i*(bw+3);
+        doc.setFillColor(240,248,244); doc.roundedRect(x,y,bw,14,2,2,'F');
+        doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(14,53,40);
+        doc.text(n.val, x+bw/2, y+7, {align:'center'});
+        doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(90,138,116);
+        doc.text(n.label, x+bw/2, y+12, {align:'center'});
+      });
+      y += 18;
+    }
+
+    // Footer on each page
+    const total = doc.internal.getNumberOfPages();
+    for (let p=1; p<=total; p++) {
+      doc.setPage(p); doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(150,150,150);
+      doc.text('Recipe Vault', margin, pageH-8);
+      doc.text('Page '+p+' of '+total, pageW-margin, pageH-8, {align:'right'});
+    }
+
+    return doc.output('arraybuffer');
+  } catch(e) {
+    console.error('PDF generation failed:', e);
+    return null;
   }
 }
 
