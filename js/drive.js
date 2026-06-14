@@ -169,12 +169,12 @@ async function gfetchText(url) {
   return res.text();
 }
 
-async function findOrNull(query) {
+async function findOrNull(query, spaces = 'drive') {
   try {
     const data = await gfetch(
       'https://www.googleapis.com/drive/v3/files?q=' +
       encodeURIComponent(query) +
-      '&fields=files(id,name)&pageSize=1'
+      '&fields=files(id,name)&pageSize=1&spaces=' + spaces
     );
     return data.files?.[0] || null;
   } catch(e) { return null; }
@@ -199,36 +199,9 @@ async function syncFromDrive() {
   try {
     const folderName = (drive.folderPath || 'Recipes').replace(/^\//, '').trim();
 
-    // Try 1: exact match in root
-    let rootFolder = await findOrNull(
-      `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`
-    );
-
-    // Try 2: exact match anywhere
-    if (!rootFolder) {
-      rootFolder = await findOrNull(
-        `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`
-      );
-    }
-
-    // Try 3: list all top-level folders and match case-insensitively
-    if (!rootFolder) {
-      const data = await gfetch(
-        'https://www.googleapis.com/drive/v3/files?q=' +
-        encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`) +
-        '&fields=files(id,name)&pageSize=100'
-      );
-      const folders = data.files || [];
-      rootFolder = folders.find(f => f.name.toLowerCase() === folderName.toLowerCase()) || null;
-      if (!rootFolder) {
-        const names = folders.map(f => '"' + f.name + '"').join(', ');
-        showToast('Folder "' + folderName + '" not found. Found: ' + (names || 'no folders'));
-        showSyncBar(false);
-        state.recipes = DEMO_RECIPES;
-        buildCuisineChips(); applyFilters();
-        return;
-      }
-    }
+    // Use known Recipes folder ID directly — avoids finding OneDrive folder by mistake
+    const RECIPES_FOLDER_ID = '1txHMRLqVaAL4uJjEokPeo17NDdK8XKGj';
+    const rootFolder = { id: RECIPES_FOLDER_ID, name: folderName };
 
     // Find cuisine subfolders
     const subfolders = await listFiles(
@@ -523,25 +496,10 @@ async function saveRecipeToDrive(recipe) {
       throw new Error('Auth failed ' + aboutRes.status + ': ' + (err.error?.message || aboutRes.statusText));
     }
 
-    // Find or create Recipes root folder
-    const rootName  = (drive.folderPath || 'Recipes').replace(/^\//, '');
-    const searchRes = await fetch(
-      'https://www.googleapis.com/drive/v3/files?q=' +
-      encodeURIComponent(`name='${rootName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`) +
-      '&fields=files(id,name)&pageSize=5',
-      { headers: { 'Authorization': 'Bearer ' + drive.accessToken } }
-    );
-    const searchData  = await searchRes.json();
-    let   rootFolder  = searchData.files?.[0] || null;
-    if (!rootFolder) {
-      const cr = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: rootName, mimeType: 'application/vnd.google-apps.folder' }),
-      });
-      if (!cr.ok) { const e=await cr.json().catch(()=>({})); throw new Error('Create folder failed ' + cr.status + ': ' + (e.error?.message||cr.statusText)); }
-      rootFolder = await cr.json();
-    }
+    // Use the known Recipes folder ID directly — no searching needed
+    const rootName   = (drive.folderPath || 'Recipes').replace(/^\//, '').trim();
+    const RECIPES_FOLDER_ID = '1txHMRLqVaAL4uJjEokPeo17NDdK8XKGj';
+    const rootFolder = { id: RECIPES_FOLDER_ID, name: rootName };
 
     // Find or create cuisine subfolder
     const subRes = await fetch(
@@ -587,7 +545,7 @@ async function saveRecipeToDrive(recipe) {
       if (!ur.ok) { const e=await ur.json().catch(()=>({})); throw new Error('Update failed ' + ur.status + ': ' + (e.error?.message||ur.statusText)); }
       fileData = { id: existing.id };
     } else {
-      // Create new PDF file
+      // Create new PDF — use supportsAllDrives=false to ensure it lands in user's My Drive
       const form = new FormData();
       form.append('metadata', new Blob([JSON.stringify({
         name:    fileName,
@@ -596,7 +554,7 @@ async function saveRecipeToDrive(recipe) {
       })], { type: 'application/json' }));
       form.append('file', new Blob([pdfBytes], { type: 'application/pdf' }));
       const fr = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=false',
         { method: 'POST', headers: { 'Authorization': 'Bearer ' + drive.accessToken }, body: form }
       );
       if (!fr.ok) { const e=await fr.json().catch(()=>({})); throw new Error('Upload failed ' + fr.status + ': ' + (e.error?.message||fr.statusText)); }
