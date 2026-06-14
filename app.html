@@ -321,6 +321,20 @@
 <div id="edit-recipe-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:520px;max-height:85vh;overflow-y:auto">
     <h3 class="modal-title">✏️ Edit recipe</h3>
+
+    <!-- Thumbnail editor -->
+    <div class="field-label" style="margin-bottom:14px">
+      Thumbnail
+      <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+        <div id="edit-thumb-preview" style="width:64px;height:64px;border-radius:12px;background:var(--clr-coral-lt);display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;overflow:hidden;cursor:pointer;border:2px dashed var(--clr-border-mid)" onclick="document.getElementById('edit-thumb-upload').click()" title="Click to upload a photo">🍽️</div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--clr-muted);margin-bottom:8px">Pick an emoji or upload a photo</div>
+          <input type="file" id="edit-thumb-upload" accept="image/*" style="display:none" onchange="handleThumbUpload(event)" />
+          <div id="emoji-picker" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+        </div>
+      </div>
+    </div>
+
     <label class="field-label">Recipe name
       <input class="field-input" id="edit-name" type="text" />
     </label>

@@ -258,6 +258,13 @@ async function syncFromDrive() {
     saveCachedRecipes(cached);
 
     state.recipes = recipes.length > 0 ? recipes : DEMO_RECIPES;
+
+    // Restore any saved custom thumbnails from localStorage
+    state.recipes.forEach(r => {
+      const saved = localStorage.getItem('rv_thumb_' + r.id);
+      if (saved) r.thumbImage = saved;
+    });
+
     buildCuisineChips();
     applyFilters();
     showToast('Loaded ' + recipes.length + ' recipe' + (recipes.length !== 1 ? 's' : '') + ' from Drive ✓');

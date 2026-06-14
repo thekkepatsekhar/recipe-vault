@@ -154,8 +154,11 @@ function renderRecipes(list) {
   list.forEach(recipe=>{
     const card=document.createElement('div');
     card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0');
-    card.innerHTML=`
-      <div class="recipe-thumb">${recipe.emoji||'🍽️'}</div>
+    const thumb = recipe.thumbImage
+      ? `<img src="${recipe.thumbImage}" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px)" />`
+      : (recipe.emoji || '🍽️');
+    card.innerHTML = `
+      <div class="recipe-thumb" style="${recipe.thumbImage ? 'padding:0;overflow:hidden' : ''}">${thumb}</div>
       <div class="recipe-info">
         <div class="recipe-name">${recipe.name}</div>
         <div class="recipe-sub">${recipe.cuisine} · ${recipe.time}</div>
@@ -173,7 +176,16 @@ function openRecipe(recipe) {
   state.currentServings = recipe.servings||2;
   state.baseServings    = recipe.servings||2;
 
-  document.getElementById('detail-emoji').textContent = recipe.emoji||'🍽️';
+  const emojiEl = document.getElementById('detail-emoji');
+  if (emojiEl) {
+    if (recipe.thumbImage) {
+      emojiEl.innerHTML = `<img src="${recipe.thumbImage}" style="width:80px;height:80px;object-fit:cover;border-radius:16px;margin-bottom:4px" />`;
+      emojiEl.style.fontSize = '0';
+    } else {
+      emojiEl.textContent = recipe.emoji || '🍽️';
+      emojiEl.style.fontSize = '';
+    }
+  }
   document.getElementById('detail-name').textContent  = recipe.name;
   document.getElementById('detail-meta-row').textContent = recipe.cuisine+' · '+recipe.time+' · '+(recipe.servings||2)+' servings';
 
@@ -809,17 +821,86 @@ async function saveCurrentRecipeToDrive() {
 }
 
 // ── EDIT RECIPE ───────────────────────────────────────────────────────────────
+const FOOD_EMOJIS = ['🍝','🍛','🌮','🍣','🍕','🥘','🍜','🥗','🍲','🥩','🍗','🐟','🦐','🥚','🥞','🍞','🥐','🥨','🧀','🥦','🫕','🍱','🥟','🦪','🍤','🌯','🫔','🥙','🧆','🥜','🍖','🍔','🌭','🫙','🧂','🫚','🥫','🍿','🧁','🎂','🍰','🍮','🍭','🍫','🍩','🍪','🍨','🍧','🧇','🫓'];
+
+let editThumbValue = null; // stores emoji string or base64 image data
+
 function openEditRecipeModal() {
-  if(!state.currentRecipe)return;
-  const r=state.currentRecipe;
-  document.getElementById('edit-name').value        =r.name||'';
-  document.getElementById('edit-cuisine').value     =r.cuisine||'';
-  document.getElementById('edit-time').value        =r.time||'';
-  document.getElementById('edit-servings').value    =r.servings||4;
-  document.getElementById('edit-tags').value        =(r.tags||[]).join(', ');
-  document.getElementById('edit-ingredients').value =(r.ingredients||[]).map(i=>(i.amount?i.amount+' ':'')+i.item).join('\n');
-  document.getElementById('edit-steps').value       =(r.steps||[]).join('\n');
+  if (!state.currentRecipe) return;
+  const r = state.currentRecipe;
+
+  // Set current thumbnail
+  editThumbValue = r.thumbImage || r.emoji || '🍽️';
+  updateThumbPreview();
+
+  // Build emoji picker
+  const picker = document.getElementById('emoji-picker');
+  if (picker) {
+    picker.innerHTML = FOOD_EMOJIS.map(e =>
+      `<button onclick="selectThumbEmoji('${e}')" style="font-size:22px;padding:4px;border-radius:6px;background:transparent;border:1.5px solid transparent;cursor:pointer;transition:all .12s" 
+       title="${e}">${e}</button>`
+    ).join('');
+  }
+
+  document.getElementById('edit-name').value        = r.name        || '';
+  document.getElementById('edit-cuisine').value     = r.cuisine     || '';
+  document.getElementById('edit-time').value        = r.time        || '';
+  document.getElementById('edit-servings').value    = r.servings    || 4;
+  document.getElementById('edit-tags').value        = (r.tags||[]).join(', ');
+  document.getElementById('edit-ingredients').value = (r.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
+  document.getElementById('edit-steps').value       = (r.steps||[]).join('\n');
+
   document.getElementById('edit-recipe-modal').classList.remove('hidden');
+}
+
+function updateThumbPreview() {
+  const preview = document.getElementById('edit-thumb-preview');
+  if (!preview) return;
+  if (editThumbValue && editThumbValue.startsWith('data:')) {
+    // Photo
+    preview.innerHTML = `<img src="${editThumbValue}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" />`;
+  } else {
+    // Emoji
+    preview.textContent = editThumbValue || '🍽️';
+  }
+}
+
+function selectThumbEmoji(emoji) {
+  editThumbValue = emoji;
+  updateThumbPreview();
+  // Highlight selected
+  document.querySelectorAll('#emoji-picker button').forEach(btn => {
+    btn.style.borderColor = btn.textContent === emoji ? 'var(--clr-coral)' : 'transparent';
+    btn.style.background  = btn.textContent === emoji ? 'var(--clr-coral-lt)' : 'transparent';
+  });
+}
+
+function handleThumbUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file'); return; }
+  if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB'); return; }
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Resize image to max 200x200 to keep storage small
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const size   = Math.min(img.width, img.height, 200);
+      canvas.width  = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      // Centre-crop
+      const sx = (img.width  - size) / 2;
+      const sy = (img.height - size) / 2;
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+      editThumbValue = canvas.toDataURL('image/jpeg', 0.8);
+      updateThumbPreview();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function saveEditedRecipe() {
@@ -834,11 +915,25 @@ async function saveEditedRecipe() {
   const stepsRaw=document.getElementById('edit-steps').value.trim().split('\n').filter(Boolean);
   if(!name){document.getElementById('edit-name')?.focus();showToast('Name is required');return;}
   const ingredients=ingsRaw.map(line=>{const m=line.match(/^([\d.\/]+\s*(?:g|kg|ml|l|tsp|tbsp|cup|oz|lb|cloves?|bunch|pinch|large|medium|small|handful)?)\s+(.*)/i);return m?{amount:m[1].trim(),item:m[2].trim()}:{amount:'',item:line};});
-  const updated={...state.currentRecipe,name,cuisine,time,servings,tags,ingredients,steps:stepsRaw,emoji:guessEmoji(cuisine)};
-  state.currentRecipe=updated;
-  const idx=state.recipes.findIndex(r=>r.id===updated.id);
-  if(idx!==-1)state.recipes[idx]=updated;
-  if(updated.driveFileId){const cache=getCachedRecipes();cache['drive_'+updated.driveFileId]=updated;saveCachedRecipes(cache);}
+  const updated = {
+    ...state.currentRecipe,
+    name, cuisine, time, servings, tags, ingredients,
+    steps:      stepsRaw,
+    emoji:      (editThumbValue && !editThumbValue.startsWith('data:')) ? editThumbValue : (state.currentRecipe.emoji || guessEmoji(cuisine)),
+    thumbImage: (editThumbValue && editThumbValue.startsWith('data:'))  ? editThumbValue : null,
+  };
+  state.currentRecipe = updated;
+  const idx = state.recipes.findIndex(r => r.id === updated.id);
+  if (idx !== -1) state.recipes[idx] = updated;
+
+  // Save thumbnail to localStorage (keyed by recipe ID)
+  if (updated.thumbImage) {
+    try { localStorage.setItem('rv_thumb_' + updated.id, updated.thumbImage); } catch(e) {}
+  } else {
+    localStorage.removeItem('rv_thumb_' + updated.id);
+  }
+
+  if (updated.driveFileId) {const cache=getCachedRecipes();cache['drive_'+updated.driveFileId]=updated;saveCachedRecipes(cache);}
   document.getElementById('detail-name').textContent     =updated.name;
   document.getElementById('detail-emoji').textContent    =updated.emoji;
   document.getElementById('detail-meta-row').textContent =updated.cuisine+' · '+updated.time+' · '+updated.servings+' servings';
