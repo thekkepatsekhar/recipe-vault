@@ -1,10 +1,12 @@
 // ── RECIPE VAULT — ONEDRIVE INTEGRATION ──────────────────────────────────────
-// Microsoft Graph API for OneDrive access
 
 const MICROSOFT_CLIENT_ID = 'ad20b91f-5d60-4a9a-aa2a-7bd89af5049c';
-const MICROSOFT_SCOPE     = 'https://graph.microsoft.com/Files.ReadWrite openid profile email';
 const GRAPH_BASE          = 'https://graph.microsoft.com/v1.0';
-const RECIPES_ONEDRIVE_PATH = 'Recipes'; // folder name in OneDrive
+
+// Use the /consumers endpoint which only works with personal Microsoft accounts
+// This bypasses the "unauthorized_client" error for personal accounts
+const MS_AUTH_BASE = 'https://login.microsoftonline.com/consumers/oauth2/v2.0';
+const MS_SCOPE     = 'https://graph.microsoft.com/Files.ReadWrite https://graph.microsoft.com/User.Read offline_access';
 
 const onedrive = {
   accessToken: null,
@@ -12,11 +14,11 @@ const onedrive = {
   isSignedIn:  false,
 };
 
-// ── INIT — check for token in URL hash after redirect ─────────────────────────
 async function initOneDriveAuth() {
   const hash = window.location.hash;
-  if (hash && hash.includes('access_token') && hash.includes('microsoft')) {
-    const params  = new URLSearchParams(hash.slice(1));
+  if (hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.slice(1));
+    if (params.get('state') !== 'microsoft') return; // Not a Microsoft token
     const token   = params.get('access_token');
     const expires = parseInt(params.get('expires_in') || '3600');
     if (token) {
@@ -64,12 +66,13 @@ function signInWithMicrosoft() {
     client_id:     MICROSOFT_CLIENT_ID,
     redirect_uri:  redirectUri,
     response_type: 'token',
-    scope:         MICROSOFT_SCOPE,
+    scope:         MS_SCOPE,
     prompt:        'select_account',
-    // Tell Microsoft this is a OneDrive token so we can distinguish it from Google's
     state:         'microsoft',
   });
-  window.location.href = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' + params.toString();
+  // Use /consumers endpoint — works with personal Microsoft accounts only
+  // This avoids the "unauthorized_client" error from work account restrictions
+  window.location.href = MS_AUTH_BASE + '/authorize?' + params.toString();
 }
 
 // ── SIGN OUT ──────────────────────────────────────────────────────────────────
