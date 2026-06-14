@@ -276,6 +276,101 @@ function renderSteps(steps) {
 }
 
 // ── IN-APP VIEWER ─────────────────────────────────────────────────────────────
+function printCurrentRecipe() {
+  if (!state.currentRecipe) return;
+  const r     = state.currentRecipe;
+  const ratio = state.currentServings / state.baseServings;
+
+  const scaleAmt = (amount) => {
+    if (ratio === 1 || !amount) return amount;
+    const match = amount.match(/^([\d.\/]+)\s*(.*)/);
+    if (!match) return amount;
+    let num = match[1].includes('/') ? eval(match[1]) : parseFloat(match[1]);
+    const scaled = num * ratio;
+    const display = scaled % 1 === 0 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, '');
+    return display + (match[2] ? ' ' + match[2] : '');
+  };
+
+  const ings = (r.ingredients || []).map(i =>
+    `<tr><td class="amt">${scaleAmt(i.amount || '')}</td><td>${i.item}</td></tr>`
+  ).join('');
+
+  const steps = (r.steps || []).map((s, i) =>
+    `<div class="step"><div class="step-num">${i + 1}</div><div class="step-text">${s}</div></div>`
+  ).join('');
+
+  const nutrition = r.nutrition ? `
+    <div class="section-title">Nutrition per serving</div>
+    <div class="nut-grid">
+      <div class="nut-box"><div class="nut-val">${Math.round(r.nutrition.calories * ratio)}</div><div class="nut-lbl">kcal</div></div>
+      <div class="nut-box"><div class="nut-val">${Math.round(r.nutrition.protein * ratio)}g</div><div class="nut-lbl">protein</div></div>
+      <div class="nut-box"><div class="nut-val">${Math.round(r.nutrition.carbs * ratio)}g</div><div class="nut-lbl">carbs</div></div>
+      <div class="nut-box"><div class="nut-val">${Math.round(r.nutrition.fat * ratio)}g</div><div class="nut-lbl">fat</div></div>
+    </div>` : '';
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${r.name} — Recipe Vault</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',sans-serif;font-size:14px;color:#1a1a1a;max-width:680px;margin:0 auto;padding:20px}
+    .header{background:#0e3528;color:white;padding:20px 24px;border-radius:12px;margin-bottom:20px}
+    .emoji{font-size:40px;margin-bottom:8px}
+    h1{font-family:'Lora',serif;font-size:26px;font-weight:600;margin-bottom:6px}
+    .meta{font-size:13px;color:rgba(255,255,255,0.65)}
+    .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .tag{background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.85);font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
+    .section-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#5a8a74;margin:20px 0 10px;padding-bottom:6px;border-bottom:1.5px solid #c8e6d8}
+    table{width:100%;border-collapse:collapse}
+    td{padding:6px 4px;border-bottom:1px solid #e8f4ee;vertical-align:top;font-size:14px}
+    td.amt{font-weight:600;color:#e8623a;width:90px;white-space:nowrap}
+    .step{display:flex;gap:12px;margin-bottom:12px;align-items:flex-start}
+    .step-num{min-width:26px;height:26px;border-radius:50%;background:#e8623a;color:white;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+    .step-text{line-height:1.65;font-size:14px}
+    .nut-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .nut-box{background:#f2faf7;border-radius:8px;padding:10px 8px;text-align:center}
+    .nut-val{font-size:16px;font-weight:600;color:#0e3528}
+    .nut-lbl{font-size:11px;color:#5a8a74;margin-top:2px}
+    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e0f2ea;font-size:11px;color:#aaa;text-align:center}
+    @media print{
+      body{padding:0;max-width:100%}
+      .no-print{display:none}
+      @page{margin:1.5cm}
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="emoji">${r.emoji || '🍽️'}</div>
+    <h1>${r.name}</h1>
+    <div class="meta">${[r.cuisine, r.time, state.currentServings + ' servings'].filter(Boolean).join('  ·  ')}</div>
+    ${(r.tags || []).length ? `<div class="tags">${r.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+  </div>
+
+  <button class="no-print" onclick="window.print()" style="background:#e8623a;color:white;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:16px;width:100%">
+    🖨️ Print / Save as PDF
+  </button>
+
+  ${ings ? `<div class="section-title">Ingredients</div><table>${ings}</table>` : ''}
+  ${steps ? `<div class="section-title">Method</div>${steps}` : ''}
+  ${nutrition}
+
+  <div class="footer">Recipe Vault · ${r.name}</div>
+
+  <script>
+    // Auto-trigger print dialog after fonts load
+    window.onload = () => setTimeout(() => window.print(), 500);
+  </script>
+</body>
+</html>`);
+  win.document.close();
+}
+
 function openInCloud() {
   if (!state.currentRecipe) return;
   const recipe=state.currentRecipe;
