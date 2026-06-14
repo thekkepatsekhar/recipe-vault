@@ -567,38 +567,77 @@ function generatePlannerList(mode){
 
 // ── IMPORT ────────────────────────────────────────────────────────────────────
 async function extractRecipe() {
-  const urlInput=document.getElementById('import-url');
-  const url=urlInput?.value.trim();
-  if(!url){urlInput?.focus();showToast('Please enter a URL');return;}
+  const urlInput = document.getElementById('import-url');
+  const url = urlInput?.value.trim();
+  if (!url) { urlInput?.focus(); showToast('Please enter a URL'); return; }
+
   document.getElementById('import-loading')?.classList.remove('hidden');
   document.getElementById('import-error')?.classList.add('hidden');
   document.getElementById('import-preview')?.classList.add('hidden');
-  const btn=document.getElementById('btn-extract');if(btn)btn.disabled=true;
+  const btn = document.getElementById('btn-extract');
+  if (btn) btn.disabled = true;
+
   try {
-    let pageContent='';
-    try {pageContent=await fetchPageContent(url);} catch(e){}
-    const prompt=pageContent
-      ?`Extract the recipe from this webpage content. Return ONLY valid JSON, no markdown:\n{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}\nURL: ${url}\nPage content: ${pageContent}`
-      :`Extract or guess the recipe from this URL. Return ONLY valid JSON, no markdown:\n{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}\nURL: ${url}`;
-    const text=await callClaude([{role:'user',content:prompt}]);
-    const recipe=JSON.parse(text.replace(/```json|```/g,'').trim());
-    document.getElementById('imp-name')        &&(document.getElementById('imp-name').value        =recipe.name||'');
-    document.getElementById('imp-cuisine')     &&(document.getElementById('imp-cuisine').value     =recipe.cuisine||'');
-    document.getElementById('imp-time')        &&(document.getElementById('imp-time').value        =recipe.time||'');
-    document.getElementById('imp-servings')    &&(document.getElementById('imp-servings').value    =recipe.servings||4);
-    document.getElementById('imp-ingredients') &&(document.getElementById('imp-ingredients').value =(recipe.ingredients||[]).map(i=>(i.amount?i.amount+' ':'')+i.item).join('\n'));
-    document.getElementById('imp-steps')       &&(document.getElementById('imp-steps').value       =(recipe.steps||[]).join('\n'));
+    let prompt;
+
+    // Check if it's a YouTube URL — fetch content differently
+    const isYouTube = /youtube\.com|youtu\.be/i.test(url);
+
+    if (isYouTube) {
+      // Extract video ID from URL
+      const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1] || '';
+      prompt = `A user wants to import a recipe from this YouTube video: ${url}
+${videoId ? `Video ID: ${videoId}` : ''}
+
+YouTube videos cannot be accessed directly, so use your knowledge to identify this recipe.
+Look at the URL for clues about the video title or channel.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+
+If you cannot identify the specific recipe, make your best guess based on any clues in the URL, or create a template with placeholder values the user can edit.`;
+    } else {
+      // For regular websites, try to fetch the page content
+      let pageContent = '';
+      try { pageContent = await fetchPageContent(url); } catch(e) {}
+      prompt = pageContent
+        ? `Extract the recipe from this webpage. Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+URL: ${url}
+Page content: ${pageContent}`
+        : `Extract or guess the recipe from this URL. Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+URL: ${url}`;
+    }
+
+    const text   = await callClaude([{ role: 'user', content: prompt }]);
+    const recipe = JSON.parse(text.replace(/```json|```/g, '').trim());
+
+    document.getElementById('imp-name')        && (document.getElementById('imp-name').value        = recipe.name     || '');
+    document.getElementById('imp-cuisine')     && (document.getElementById('imp-cuisine').value     = recipe.cuisine  || '');
+    document.getElementById('imp-time')        && (document.getElementById('imp-time').value        = recipe.time     || '');
+    document.getElementById('imp-servings')    && (document.getElementById('imp-servings').value    = recipe.servings || 4);
+    document.getElementById('imp-ingredients') && (document.getElementById('imp-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n'));
+    document.getElementById('imp-steps')       && (document.getElementById('imp-steps').value       = (recipe.steps||[]).join('\n'));
     document.getElementById('import-preview')?.classList.remove('hidden');
-    showToast('Recipe extracted ✓ — review and save');
+
+    if (isYouTube) {
+      showToast('Recipe guessed from YouTube URL — please review and edit ✓');
+    } else {
+      showToast('Recipe extracted ✓ — review and save');
+    }
+
   } catch(err) {
-    console.error('Import error:',err);
-    const el=document.getElementById('import-error');
-    if(el){el.textContent='AI extraction failed ('+err.message+'). Fill in the details manually below.';el.classList.remove('hidden');}
-    ['imp-name','imp-cuisine','imp-time','imp-ingredients','imp-steps'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value='';});
+    console.error('Import error:', err);
+    const el = document.getElementById('import-error');
+    if (el) {
+      el.textContent = 'Could not extract automatically. Fill in the details below and save manually.';
+      el.classList.remove('hidden');
+    }
     document.getElementById('import-preview')?.classList.remove('hidden');
   } finally {
     document.getElementById('import-loading')?.classList.add('hidden');
-    if(btn)btn.disabled=false;
+    if (btn) btn.disabled = false;
   }
 }
 
