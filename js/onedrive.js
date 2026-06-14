@@ -1,6 +1,6 @@
 // ── RECIPE VAULT — ONEDRIVE INTEGRATION ──────────────────────────────────────
 
-const MICROSOFT_CLIENT_ID = 'ad20b91f-5d60-4a9a-aa2a-7bd89af5049c';
+const MICROSOFT_CLIENT_ID = '905544c2-61cd-4199-83fb-b5e3657d7b3e';
 const GRAPH_BASE          = 'https://graph.microsoft.com/v1.0';
 
 // Use the /consumers endpoint which only works with personal Microsoft accounts
