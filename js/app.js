@@ -51,6 +51,11 @@ function bootApp() {
   const keyField = document.getElementById('anthropic-key');
   if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
   initGoogleAuth();
+  if (typeof initOneDriveAuth === 'function') initOneDriveAuth();
+
+  // Set active cloud button state
+  const activeCloud = localStorage.getItem('rv_active_cloud') || 'gdrive';
+  setActiveCloud(activeCloud);
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────────
@@ -81,10 +86,22 @@ function renderSettings() {
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
 function updateCloudBadge() {
-  const icon=document.getElementById('cloud-icon'), label=document.getElementById('cloud-label');
-  const sd=(typeof drive!=='undefined')&&drive.isSignedIn;
-  if (icon)  icon.textContent  = sd?'🟢':'☁️';
-  if (label) label.textContent = sd?(drive.userProfile?.email||'Google Drive'):'Sign in to connect';
+  const icon   = document.getElementById('cloud-icon');
+  const label  = document.getElementById('cloud-label');
+  const active = localStorage.getItem('rv_active_cloud') || 'gdrive';
+  const gdSd   = (typeof drive !== 'undefined') && drive.isSignedIn;
+  const odSd   = (typeof onedrive !== 'undefined') && onedrive.isSignedIn;
+
+  if (active === 'onedrive' && odSd) {
+    if (icon)  icon.textContent  = '🔵';
+    if (label) label.textContent = onedrive.userProfile?.email || 'OneDrive';
+  } else if (active === 'gdrive' && gdSd) {
+    if (icon)  icon.textContent  = '🟢';
+    if (label) label.textContent = drive.userProfile?.email || 'Google Drive';
+  } else {
+    if (icon)  icon.textContent  = '☁️';
+    if (label) label.textContent = 'Sign in to connect';
+  }
 }
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
@@ -766,25 +783,16 @@ async function saveImportedRecipe() {
   buildCuisineChips();applyFilters();
   resetImport();navigate('recipes');
 
-  // Save to Drive
-  if(typeof saveRecipeToDrive==='function'&&typeof drive!=='undefined'&&drive.isSignedIn){
-    showToast('Saving "'+name+'" to Google Drive…');
-    try {
-      const ok=await saveRecipeToDrive(newRecipe);
-      if(ok){
-        // Update the recipe with the Drive file ID from the save result
-        const idx=state.recipes.findIndex(r=>r.id===newRecipe.id);
-        if(idx!==-1){state.recipes[idx]=newRecipe;}
-        showToast('"'+name+'" saved to Drive ✓');
-      } else {
-        showToast('Drive save failed — recipe saved locally only');
-      }
-    } catch(e){
-      showToast('Drive save error: '+e.message);
-      console.error('Drive save error:',e);
-    }
+  // Save to active cloud
+  const activeCloud = localStorage.getItem('rv_active_cloud') || 'gdrive';
+  if (activeCloud === 'onedrive' && typeof saveRecipeToOneDrive === 'function' && onedrive?.isSignedIn) {
+    showToast('Saving "' + name + '" to OneDrive…');
+    try { await saveRecipeToOneDrive(newRecipe); } catch(e) { showToast('OneDrive save failed: ' + e.message); }
+  } else if (typeof saveRecipeToDrive === 'function' && drive?.isSignedIn) {
+    showToast('Saving "' + name + '" to Google Drive…');
+    try { await saveRecipeToDrive(newRecipe); } catch(e) { showToast('Drive save failed: ' + e.message); }
   } else {
-    showToast('"'+name+'" saved locally. Sign in to Drive to sync.');
+    showToast('"' + name + '" saved locally. Sign in to sync to cloud.');
   }
 }
 
@@ -985,9 +993,34 @@ function saveAnthropicKey(){
   localStorage.setItem('rv_anthropic_key',key);
   showToast('API key saved ✓ — AI features now active');
 }
-function resync(){
-  if(typeof syncFromDrive==='function'&&typeof drive!=='undefined'&&drive.isSignedIn){syncFromDrive();}
-  else{showToast('Sign in to Google Drive first');navigate('settings');}
+function setActiveCloud(cloud) {
+  localStorage.setItem('rv_active_cloud', cloud);
+  const gBtn = document.getElementById('cloud-select-gdrive');
+  const oBtn = document.getElementById('cloud-select-onedrive');
+  if (gBtn) { gBtn.style.background = cloud === 'gdrive'    ? 'var(--clr-paper-mid)' : 'transparent'; gBtn.style.borderColor = cloud === 'gdrive'    ? 'var(--clr-ink)' : 'var(--clr-border-mid)'; }
+  if (oBtn) { oBtn.style.background = cloud === 'onedrive' ? 'var(--clr-paper-mid)' : 'transparent'; oBtn.style.borderColor = cloud === 'onedrive' ? '#0078d4'       : 'var(--clr-border-mid)'; }
+  updateCloudBadge();
+  showToast('Active cloud: ' + (cloud === 'gdrive' ? 'Google Drive' : 'OneDrive'));
+  resync();
+}
+
+function resync() {
+  const cloud = localStorage.getItem('rv_active_cloud') || 'gdrive';
+  if (cloud === 'onedrive') {
+    if (typeof syncFromOneDrive === 'function' && onedrive?.isSignedIn) {
+      syncFromOneDrive();
+    } else {
+      showToast('Sign in to OneDrive first');
+      navigate('settings');
+    }
+  } else {
+    if (typeof syncFromDrive === 'function' && drive?.isSignedIn) {
+      syncFromDrive();
+    } else {
+      showToast('Sign in to Google Drive first');
+      navigate('settings');
+    }
+  }
 }
 function connectCloud(){}
 function switchCloud(){}

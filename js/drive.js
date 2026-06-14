@@ -12,10 +12,12 @@ const drive = {
 
 // ── INIT — check for token in URL hash after redirect ─────────────────────────
 async function initGoogleAuth() {
-  // Check if we just came back from Google sign-in (token is in URL hash)
+  // Check if we just came back from Google sign-in
+  // Ignore if it's a Microsoft redirect (state=microsoft)
   const hash = window.location.hash;
   if (hash && hash.includes('access_token')) {
-    const params  = new URLSearchParams(hash.slice(1));
+    const params = new URLSearchParams(hash.slice(1));
+    if (params.get('state') === 'microsoft') return; // Let OneDrive handle it
     const token   = params.get('access_token');
     const expires = parseInt(params.get('expires_in') || '3600');
     if (token) {
