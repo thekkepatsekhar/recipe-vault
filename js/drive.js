@@ -24,7 +24,6 @@ async function initGoogleAuth() {
         token,
         expiry: Date.now() + (expires - 60) * 1000,
       }));
-      // Clean the ugly token from the URL bar
       history.replaceState(null, '', window.location.pathname);
       await fetchUserProfile();
       drive.isSignedIn = true;
@@ -33,17 +32,26 @@ async function initGoogleAuth() {
     }
   }
 
-  // Try restoring a previously saved token
+  // Try restoring saved token
   try {
     const raw = localStorage.getItem('rv_gtoken');
     if (raw) {
       const saved = JSON.parse(raw);
       if (saved.token && saved.expiry > Date.now()) {
         drive.accessToken = saved.token;
-        await fetchUserProfile();
-        drive.isSignedIn = true;
-        onSignInSuccess();
-        return;
+        // Verify token is actually still valid
+        try {
+          await fetchUserProfile();
+          drive.isSignedIn = true;
+          onSignInSuccess();
+          return;
+        } catch(e) {
+          // Token rejected — clear and fall through
+          localStorage.removeItem('rv_gtoken');
+        }
+      } else {
+        // Token expired — clear it
+        localStorage.removeItem('rv_gtoken');
       }
     }
   } catch(e) {}
@@ -51,7 +59,7 @@ async function initGoogleAuth() {
   updateSignInUI(false);
 }
 
-// ── SIGN IN — redirect to Google (no popup needed) ────────────────────────────
+// ── SIGN IN — redirect to Google ──────────────────────────────────────────────
 function signInWithGoogle() {
   const redirectUri = window.location.origin + window.location.pathname;
   const params = new URLSearchParams({
@@ -59,7 +67,9 @@ function signInWithGoogle() {
     redirect_uri:  redirectUri,
     response_type: 'token',
     scope:         DRIVE_SCOPE,
-    prompt:        'consent',
+    // Use 'select_account' instead of 'consent' so returning users
+    // just pick their account without re-approving all permissions
+    prompt:        'select_account',
   });
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 }
@@ -491,7 +501,7 @@ async function saveRecipeToDrive(recipe) {
     return false;
   }
 
-  // Check token is still valid with a lightweight API call
+  // Verify token is still valid
   try {
     await gfetch('https://www.googleapis.com/drive/v3/about?fields=user');
   } catch(e) {
@@ -511,7 +521,7 @@ async function saveRecipeToDrive(recipe) {
     );
     if (!rootFolder) {
       rootFolder = await createFolder(rootName, 'root');
-      if (!rootFolder?.id) throw new Error('Could not create Recipes folder');
+      if (!rootFolder?.id) throw new Error('Could not create Recipes folder in Drive');
     }
 
     // Find or create cuisine subfolder
@@ -520,11 +530,11 @@ async function saveRecipeToDrive(recipe) {
     );
     if (!cuisineFolder) {
       cuisineFolder = await createFolder(recipe.cuisine, rootFolder.id);
-      if (!cuisineFolder?.id) throw new Error('Could not create cuisine folder');
+      if (!cuisineFolder?.id) throw new Error('Could not create cuisine folder in Drive');
     }
 
     const content  = buildRecipeText(recipe);
-    const fileName = recipe.name + '.txt';
+    const fileName = recipe.name.replace(/[/\\?%*:|"<>]/g, '-') + '.txt';
 
     // Check if file already exists
     const existing = await findOrNull(
@@ -534,11 +544,13 @@ async function saveRecipeToDrive(recipe) {
     let result;
     if (existing) {
       result = await updateDriveFile(existing.id, content);
+      recipe.driveFileId = existing.id;
     } else {
       result = await createDriveFile(fileName, content, cuisineFolder.id);
+      if (!result?.id) throw new Error('File created but no ID returned from Drive API');
+      recipe.driveFileId = result.id;
+      recipe.cloudPath   = 'https://drive.google.com/file/d/' + result.id + '/view';
     }
-
-    if (!result?.id) throw new Error('File was not created — no ID returned');
 
     showToast('"' + recipe.name + '" saved to Drive ✓');
     return true;
