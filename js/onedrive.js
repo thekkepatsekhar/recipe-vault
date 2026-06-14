@@ -269,6 +269,23 @@ async function oneDriveFileToRecipe(file) {
 
   // AI parse
   try {
+    const apiKey = localStorage.getItem('rv_anthropic_key');
+    if (!apiKey) {
+      // No API key — return placeholder with note
+      return {
+        id: 'od_' + file.id, name,
+        cuisine: file.cuisine || 'Other',
+        emoji:   guessEmoji(file.cuisine || ''),
+        time: '—', servings: 4,
+        cloudPath:  file.webUrl || '',
+        oneDriveId: file.id,
+        tags: ['From OneDrive', 'Add API key to extract'],
+        ingredients: [],
+        steps: ['Add your Anthropic API key in Settings to extract ingredients and steps.'],
+        nutrition: null,
+      };
+    }
+
     const raw = await callClaude([{
       role: 'user',
       content: `Extract this recipe and return ONLY valid JSON (no markdown):

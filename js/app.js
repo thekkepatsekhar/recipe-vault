@@ -1004,6 +1004,13 @@ function setActiveCloud(cloud) {
   resync();
 }
 
+function clearAllCacheAndResync() {
+  // Clear both Google Drive and OneDrive recipe caches
+  try { localStorage.removeItem('rv_recipe_cache'); } catch(e) {}
+  showToast('Cache cleared — resyncing…');
+  setTimeout(() => resync(), 500);
+}
+
 function resync() {
   const cloud = localStorage.getItem('rv_active_cloud') || 'gdrive';
   if (cloud === 'onedrive') {
