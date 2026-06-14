@@ -59,9 +59,9 @@ async function initOneDriveAuth() {
   updateOneDriveUI(false);
 }
 
-// ── SIGN IN ───────────────────────────────────────────────────────────────────
 function signInWithMicrosoft() {
-  const redirectUri = window.location.origin + window.location.pathname;
+  // Hardcoded redirect URI must match EXACTLY what's in Azure app registration
+  const redirectUri = 'https://recipe-vault-88p.pages.dev/app.html';
   const params = new URLSearchParams({
     client_id:     MICROSOFT_CLIENT_ID,
     redirect_uri:  redirectUri,
@@ -70,8 +70,6 @@ function signInWithMicrosoft() {
     prompt:        'select_account',
     state:         'microsoft',
   });
-  // Use /consumers endpoint — works with personal Microsoft accounts only
-  // This avoids the "unauthorized_client" error from work account restrictions
   window.location.href = MS_AUTH_BASE + '/authorize?' + params.toString();
 }
 
