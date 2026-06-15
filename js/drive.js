@@ -184,13 +184,26 @@ async function findOrNull(query, spaces = 'drive') {
 
 async function listFiles(query) {
   try {
-    const data = await gfetch(
-      'https://www.googleapis.com/drive/v3/files?q=' +
-      encodeURIComponent(query) +
-      '&fields=files(id,name,mimeType,webViewLink)&pageSize=100&orderBy=name'
-    );
-    return data.files || [];
-  } catch(e) { return []; }
+    const allFiles = [];
+    let pageToken  = null;
+
+    do {
+      const url = 'https://www.googleapis.com/drive/v3/files?q=' +
+        encodeURIComponent(query) +
+        '&fields=files(id,name,mimeType,webViewLink),nextPageToken' +
+        '&pageSize=200&orderBy=name&supportsAllDrives=true&includeItemsFromAllDrives=true' +
+        (pageToken ? '&pageToken=' + pageToken : '');
+
+      const data = await gfetch(url);
+      (data.files || []).forEach(f => allFiles.push(f));
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
+
+    return allFiles;
+  } catch(e) {
+    console.error('listFiles error:', e.message);
+    return [];
+  }
 }
 
 // ── SYNC FROM DRIVE ───────────────────────────────────────────────────────────
@@ -225,7 +238,11 @@ async function syncFromDrive() {
     }
 
     if (allFiles.length === 0) {
-      showToast('Found "' + rootFolder.name + '" but no PDF files inside.');
+      // Show what subfolders were found to help diagnose
+      const subNames = subfolders.map(s => '"' + s.name + '"').join(', ');
+      showToast('Found "' + rootFolder.name + '" with ' +
+        subfolders.length + ' subfolders (' + (subNames || 'none') +
+        ') but no PDF files inside.');
       state.recipes = DEMO_RECIPES;
       buildCuisineChips(); applyFilters();
       showSyncBar(false);
