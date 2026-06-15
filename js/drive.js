@@ -237,13 +237,34 @@ async function syncFromDrive() {
     const BATCH    = 5;
     const cached   = getCachedRecipes();
 
+    // Count how many need extraction
+    const needsExtraction = allFiles.filter(f => {
+      const c = cached['drive_' + f.id];
+      return !c || !c.ingredients || c.ingredients.length === 0;
+    }).length;
+
+    if (needsExtraction > 0) {
+      showToast(`Extracting ${needsExtraction} recipes with AI…`);
+    }
+
     for (let i = 0; i < allFiles.length; i += BATCH) {
       const batch = allFiles.slice(i, i + BATCH);
-      showToast(`Loading recipes ${i + 1}–${Math.min(i + BATCH, allFiles.length)} of ${allFiles.length}…`);
+      const batchNeedsExtraction = batch.filter(f => {
+        const c = cached['drive_' + f.id];
+        return !c || !c.ingredients || c.ingredients.length === 0;
+      }).length;
+      if (batchNeedsExtraction > 0) {
+        showToast(`Extracting recipes ${i+1}–${Math.min(i+BATCH, allFiles.length)} of ${allFiles.length}…`);
+      }
       const results = await Promise.all(batch.map(async file => {
         // Use cached version if file hasn't changed
         const cacheKey = 'drive_' + file.id;
-        if (cached[cacheKey]) return cached[cacheKey];
+        const cachedRecipe = cached[cacheKey];
+        // Use cache only if it has actual ingredients extracted
+        // Otherwise re-extract so empty recipes get filled in automatically
+        if (cachedRecipe && cachedRecipe.ingredients && cachedRecipe.ingredients.length > 0) {
+          return cachedRecipe;
+        }
         try {
           const recipe = await fileToRecipe(file);
           if (recipe) { cached[cacheKey] = recipe; }
