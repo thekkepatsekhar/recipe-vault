@@ -780,13 +780,20 @@ function openFileInDrive(recipe) {
 // ── RECIPE CACHE ──────────────────────────────────────────────────────────────
 function getCachedRecipes() {
   try {
-    return JSON.parse(localStorage.getItem('rv_recipe_cache') || '{}');
+    const CACHE_VERSION = 'v3'; // Bump this to invalidate all cached recipes
+    const raw = localStorage.getItem('rv_recipe_cache');
+    if (!raw) return {};
+    const data = JSON.parse(raw);
+    // If cache version doesn't match, return empty to force re-extraction
+    if (data._version !== CACHE_VERSION) return {};
+    return data;
   } catch(e) { return {}; }
 }
 
 function saveCachedRecipes(cache) {
   try {
-    // Keep cache under 4MB — drop oldest entries if needed
+    const CACHE_VERSION = 'v3';
+    cache._version = CACHE_VERSION;
     const str = JSON.stringify(cache);
     if (str.length < 4 * 1024 * 1024) {
       localStorage.setItem('rv_recipe_cache', str);
