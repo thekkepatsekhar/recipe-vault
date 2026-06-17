@@ -17,7 +17,7 @@ async function initGoogleAuth() {
   const hash = window.location.hash;
   if (hash && hash.includes('access_token')) {
     const params = new URLSearchParams(hash.slice(1));
-    if (params.get('state') === 'microsoft') return; // Let OneDrive handle it
+    if (params.get('state') === 'microsoft') return;
     const token   = params.get('access_token');
     const expires = parseInt(params.get('expires_in') || '3600');
     if (token) {
@@ -30,6 +30,7 @@ async function initGoogleAuth() {
       await fetchUserProfile();
       drive.isSignedIn = true;
       onSignInSuccess();
+      scheduleTokenRefresh(expires - 60);
       return;
     }
   }
@@ -41,19 +42,22 @@ async function initGoogleAuth() {
       const saved = JSON.parse(raw);
       if (saved.token && saved.expiry > Date.now()) {
         drive.accessToken = saved.token;
-        // Verify token is actually still valid
         try {
           await fetchUserProfile();
           drive.isSignedIn = true;
           onSignInSuccess();
+          // Schedule refresh for when this token expires
+          const secondsLeft = Math.floor((saved.expiry - Date.now()) / 1000);
+          scheduleTokenRefresh(secondsLeft);
           return;
         } catch(e) {
-          // Token rejected — clear and fall through
           localStorage.removeItem('rv_gtoken');
         }
       } else {
-        // Token expired — clear it
+        // Token expired — try silent refresh immediately
         localStorage.removeItem('rv_gtoken');
+        silentTokenRefresh();
+        return;
       }
     }
   } catch(e) {}
@@ -61,6 +65,87 @@ async function initGoogleAuth() {
   updateSignInUI(false);
 }
 
+// ── SILENT TOKEN REFRESH ──────────────────────────────────────────────────────
+let _refreshTimer = null;
+
+function scheduleTokenRefresh(secondsUntilExpiry) {
+  // Refresh 5 minutes before expiry
+  const refreshIn = Math.max((secondsUntilExpiry - 300) * 1000, 10000);
+  clearTimeout(_refreshTimer);
+  _refreshTimer = setTimeout(() => silentTokenRefresh(), refreshIn);
+  console.log('Token refresh scheduled in', Math.floor(refreshIn / 60000), 'minutes');
+}
+
+function silentTokenRefresh() {
+  const redirectUri = window.location.origin + window.location.pathname;
+  const params = new URLSearchParams({
+    client_id:     GOOGLE_CLIENT_ID,
+    redirect_uri:  redirectUri,
+    response_type: 'token',
+    scope:         DRIVE_SCOPE,
+    prompt:        'none', // Silent — no UI
+  });
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'display:none;width:0;height:0;position:fixed;top:-9999px';
+  iframe.src = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  document.body.appendChild(iframe);
+
+  const cleanup = () => {
+    try { document.body.removeChild(iframe); } catch(e) {}
+  };
+
+  // Timeout after 10 seconds
+  const timeout = setTimeout(() => {
+    cleanup();
+    // Silent refresh failed — show sign-in button but don't interrupt the user
+    console.log('Silent token refresh failed — user will need to sign in manually');
+    updateSignInUI(false);
+    updateCloudBadge();
+    // Show a gentle notification
+    showToast('Session expired — tap Settings to sign in again');
+  }, 10000);
+
+  iframe.onload = () => {
+    try {
+      const iframeHash = iframe.contentWindow?.location?.hash;
+      if (iframeHash && iframeHash.includes('access_token')) {
+        const iframeParams = new URLSearchParams(iframeHash.slice(1));
+        const token  = iframeParams.get('access_token');
+        const expires= parseInt(iframeParams.get('expires_in') || '3600');
+        if (token) {
+          clearTimeout(timeout);
+          drive.accessToken = token;
+          localStorage.setItem('rv_gtoken', JSON.stringify({
+            token,
+            expiry: Date.now() + (expires - 60) * 1000,
+          }));
+          if (!drive.isSignedIn) {
+            fetchUserProfile().then(() => {
+              drive.isSignedIn = true;
+              onSignInSuccess();
+            });
+          } else {
+            // Already signed in — just update the token silently
+            console.log('Token refreshed silently ✓');
+          }
+          scheduleTokenRefresh(expires - 60);
+          cleanup();
+          return;
+        }
+      }
+    } catch(e) {
+      // Cross-origin error means Google showed a login page (not silent)
+      // This means the user's Google session also expired
+    }
+    clearTimeout(timeout);
+    cleanup();
+    // Can't refresh silently — show gentle prompt
+    updateSignInUI(false);
+    updateCloudBadge();
+    showToast('Session expired — tap Settings to sign in again');
+  };
+}
 // ── SIGN IN — redirect to Google ──────────────────────────────────────────────
 function signInWithGoogle() {
   const redirectUri = window.location.origin + window.location.pathname;
