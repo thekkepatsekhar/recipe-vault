@@ -441,6 +441,40 @@ IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ing
 }
 
 // ── COOK MODE ─────────────────────────────────────────────────────────────────
+// ── WAKE LOCK — keeps screen on during cooking mode ───────────────────────────
+let _wakeLock = null;
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    console.log('Wake Lock API not supported on this browser');
+    return;
+  }
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Screen wake lock active ✓');
+    _wakeLock.addEventListener('release', () => {
+      console.log('Wake lock was released');
+    });
+  } catch(e) {
+    console.warn('Wake lock request failed:', e.message);
+  }
+}
+
+function releaseWakeLock() {
+  if (_wakeLock) {
+    _wakeLock.release().catch(()=>{});
+    _wakeLock = null;
+  }
+}
+
+// Re-acquire wake lock if the tab becomes visible again while cooking
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' &&
+      !document.getElementById('screen-cook')?.classList.contains('hidden')) {
+    requestWakeLock();
+  }
+});
+
 function startCookMode() {
   if (!state.currentRecipe) return;
   state.cookSteps=state.currentRecipe.steps||[];
@@ -449,7 +483,7 @@ function startCookMode() {
   if (cn) cn.textContent=state.currentRecipe.name;
   document.getElementById('screen-cook')?.classList.remove('hidden');
   renderCookStep();
-  if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
+  requestWakeLock();
 }
 function renderCookStep() {
   const steps=state.cookSteps,idx=state.cookStepIndex,total=steps.length;
@@ -474,6 +508,7 @@ function changeStep(delta) {
 function stopCookMode() {
   if (state.voiceActive) stopVoice();
   state.speechSynth?.cancel();
+  releaseWakeLock();
   document.getElementById('screen-cook')?.classList.add('hidden');
 }
 
