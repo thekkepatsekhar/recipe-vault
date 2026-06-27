@@ -877,11 +877,10 @@ function openFileInDrive(recipe) {
 // ── RECIPE CACHE ──────────────────────────────────────────────────────────────
 function getCachedRecipes() {
   try {
-    const CACHE_VERSION = 'v3'; // Bump this to invalidate all cached recipes
+    const CACHE_VERSION = 'v4-metric'; // Bumped to force re-extraction with metric measurements
     const raw = localStorage.getItem('rv_recipe_cache');
     if (!raw) return {};
     const data = JSON.parse(raw);
-    // If cache version doesn't match, return empty to force re-extraction
     if (data._version !== CACHE_VERSION) return {};
     return data;
   } catch(e) { return {}; }
@@ -889,7 +888,7 @@ function getCachedRecipes() {
 
 function saveCachedRecipes(cache) {
   try {
-    const CACHE_VERSION = 'v3';
+    const CACHE_VERSION = 'v4-metric';
     cache._version = CACHE_VERSION;
     const str = JSON.stringify(cache);
     if (str.length < 4 * 1024 * 1024) {
