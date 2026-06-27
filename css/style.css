@@ -315,3 +315,6 @@ ul,ol{list-style:none}
   .cook-step-text{font-size:17px}
   .cook-body{padding:20px 16px}
 }
+
+/* ── MADE IT BADGE ── */
+.made-it-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--clr-coral);margin-left:6px}
