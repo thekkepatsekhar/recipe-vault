@@ -88,6 +88,8 @@ function renderSettings() {
       gemStatus.style.color = 'var(--clr-coral)';
     }
   }
+  const gemModel = document.getElementById('gemini-model');
+  if (gemModel) gemModel.value = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -1024,6 +1026,11 @@ function saveGeminiKey() {
   }
   if (!key.startsWith('AIza')) { showToast('Gemini key should start with AIza'); return; }
   localStorage.setItem('rv_gemini_key', key);
+  // Save model name too
+  const modelField = document.getElementById('gemini-model');
+  if (modelField && modelField.value.trim()) {
+    localStorage.setItem('rv_gemini_model', modelField.value.trim());
+  }
   const status = document.getElementById('gemini-key-status');
   if (status) { status.textContent = '✓ Gemini key active — free AI enabled'; status.style.color = 'var(--clr-coral)'; }
   showToast('Gemini key saved ✓ — free AI active!');
