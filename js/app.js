@@ -50,6 +50,8 @@ function bootApp() {
   if (exp) { exp.value = state.exportTarget; exp.addEventListener('change', () => { state.exportTarget = exp.value; localStorage.setItem('rv_export', exp.value); }); }
   const keyField = document.getElementById('anthropic-key');
   if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
+  const gemField = document.getElementById('gemini-key');
+  if (gemField) gemField.value = localStorage.getItem('rv_gemini_key') || '';
   initGoogleAuth();
 }
 
@@ -77,6 +79,15 @@ function renderSettings() {
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
   const keyField = document.getElementById('anthropic-key');
   if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
+  const gemField = document.getElementById('gemini-key');
+  if (gemField) {
+    gemField.value = localStorage.getItem('rv_gemini_key') || '';
+    const gemStatus = document.getElementById('gemini-key-status');
+    if (gemStatus) {
+      gemStatus.textContent = gemField.value ? '✓ Gemini key active — free AI enabled' : '';
+      gemStatus.style.color = 'var(--clr-coral)';
+    }
+  }
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -1002,6 +1013,22 @@ async function executeDeleteRecipe() {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
+function saveGeminiKey() {
+  const field = document.getElementById('gemini-key');
+  if (!field) return;
+  const key = field.value.trim();
+  if (!key) {
+    localStorage.removeItem('rv_gemini_key');
+    showToast('Gemini key cleared');
+    return;
+  }
+  if (!key.startsWith('AIza')) { showToast('Gemini key should start with AIza'); return; }
+  localStorage.setItem('rv_gemini_key', key);
+  const status = document.getElementById('gemini-key-status');
+  if (status) { status.textContent = '✓ Gemini key active — free AI enabled'; status.style.color = 'var(--clr-coral)'; }
+  showToast('Gemini key saved ✓ — free AI active!');
+}
+
 function saveAnthropicKey(){
   const field=document.getElementById('anthropic-key');if(!field)return;
   const key=field.value.trim();
