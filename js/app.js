@@ -158,11 +158,13 @@ function renderRecipes(list) {
     const thumb = recipe.thumbImage
       ? `<img src="${recipe.thumbImage}" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px)" />`
       : (recipe.emoji || '🍽️');
+    const madeIt  = getMadeItHistory()[recipe.id];
+    const madeBadge = madeIt ? `<span class="made-it-badge">✅ Made ${madeIt.count}×</span>` : '';
     card.innerHTML = `
       <div class="recipe-thumb" style="${recipe.thumbImage ? 'padding:0;overflow:hidden' : ''}">${thumb}</div>
       <div class="recipe-info">
         <div class="recipe-name">${recipe.name}</div>
-        <div class="recipe-sub">${recipe.cuisine} · ${recipe.time}</div>
+        <div class="recipe-sub">${recipe.cuisine} · ${recipe.time}${madeBadge}</div>
       </div>
       <span class="recipe-arrow">›</span>`;
     card.onclick=()=>openRecipe(recipe);
@@ -199,6 +201,7 @@ function openRecipe(recipe) {
   renderIngredients();
   renderNutrition(recipe.nutrition);
   renderSteps(recipe.steps);
+  updateMadeItButton();
 
   // Show/hide save to drive button
   const btnSave = document.getElementById('btn-save-drive');
@@ -1019,6 +1022,50 @@ function connectCloud(){}
 function switchCloud(){}
 function updateSettingsCloud(){renderSettings();}
 function updateSettingsStats(){renderSettings();}
+
+// ── MADE IT ───────────────────────────────────────────────────────────────────
+function getMadeItHistory() {
+  try { return JSON.parse(localStorage.getItem('rv_made_it') || '{}'); } catch(e) { return {}; }
+}
+
+function saveMadeItHistory(history) {
+  try { localStorage.setItem('rv_made_it', JSON.stringify(history)); } catch(e) {}
+}
+
+function markAsMade() {
+  if (!state.currentRecipe) return;
+  const id      = state.currentRecipe.id;
+  const history = getMadeItHistory();
+  if (!history[id]) history[id] = { count: 0, dates: [] };
+  history[id].count++;
+  history[id].last = new Date().toISOString();
+  history[id].dates.unshift(new Date().toISOString());
+  history[id].dates = history[id].dates.slice(0, 10); // keep last 10
+  saveMadeItHistory(history);
+  updateMadeItButton();
+  applyFilters(); // refresh cards to show updated badge
+  showToast('Cooked ' + history[id].count + ' time' + (history[id].count !== 1 ? 's' : '') + '! ✅');
+}
+
+function updateMadeItButton() {
+  if (!state.currentRecipe) return;
+  const history = getMadeItHistory();
+  const record  = history[state.currentRecipe.id];
+  const btn     = document.getElementById('btn-made-it');
+  const info    = document.getElementById('made-it-info');
+  if (!btn) return;
+  if (record && record.last) {
+    const date  = new Date(record.last);
+    const label = date.toLocaleDateString('en-US', { day:'numeric', month:'short', year:'numeric' });
+    btn.innerHTML = '✅ Made it again!';
+    btn.style.cssText = 'background:var(--clr-paper-mid);color:var(--clr-ink);border-color:var(--clr-border-mid)';
+    if (info) info.textContent = 'Last made: ' + label + ' · ' + record.count + ' time' + (record.count !== 1 ? 's' : '');
+  } else {
+    btn.innerHTML = '✅ Mark as made';
+    btn.style.cssText = '';
+    if (info) info.textContent = '';
+  }
+}
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function closeModal(id){document.getElementById(id)?.classList.add('hidden');}
