@@ -552,10 +552,7 @@ async function aiParseRecipe(text, file) {
   }
 
   try {
-    const raw = await callClaude([{
-      role: 'user',
-      content: `You are extracting a recipe from PDF text. The text may be messy or jumbled due to PDF extraction — do your best to find the recipe information.
-
+    const parsed = await extractRecipeWithAI(name, file.cuisine || 'Unknown', text);
 Recipe name from filename: "${name}"
 Cuisine folder: "${file.cuisine || 'Unknown'}"
 
@@ -578,8 +575,7 @@ IMPORTANT:
 - nutrition can be null if not mentioned
 - Always return valid JSON even if you have to guess based on the recipe name`
     }]);
-    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
-
+    
     return {
       id: 'drive_' + file.id,
       name:     parsed.name     || name,
