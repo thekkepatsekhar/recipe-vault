@@ -1,12 +1,11 @@
 // ── RECIPE VAULT — AI API HELPER ─────────────────────────────────────────────
-// Supports both Anthropic Claude and Google Gemini
-// Gemini has a free tier — get a key at https://aistudio.google.com/apikey
-// Anthropic requires credits — get a key at https://console.anthropic.com
+// Supports both Google Gemini (free) and Anthropic Claude (paid)
+// Gemini free tier: https://aistudio.google.com/apikey
+// Anthropic paid:   https://console.anthropic.com
 
 function getActiveAI() {
   const geminiKey    = localStorage.getItem('rv_gemini_key');
   const anthropicKey = localStorage.getItem('rv_anthropic_key');
-  // Prefer Gemini if set (it's free), otherwise fall back to Anthropic
   if (geminiKey)    return { provider: 'gemini',    key: geminiKey    };
   if (anthropicKey) return { provider: 'anthropic', key: anthropicKey };
   return null;
@@ -14,51 +13,38 @@ function getActiveAI() {
 
 async function callClaude(messages, maxTokens = 1500) {
   const ai = getActiveAI();
-
-  if (!ai) {
-    throw new Error('No API key set — add a Gemini or Anthropic key in Settings');
-  }
-
-  if (ai.provider === 'gemini') {
-    return callGemini(messages, ai.key, maxTokens);
-  } else {
-    return callAnthropic(messages, ai.key, maxTokens);
-  }
+  if (!ai) throw new Error('No API key set — add a Gemini or Anthropic key in Settings');
+  return ai.provider === 'gemini'
+    ? callGemini(messages, ai.key, maxTokens)
+    : callAnthropic(messages, ai.key, maxTokens);
 }
 
-// ── GOOGLE GEMINI ─────────────────────────────────────────────────────────────
+// ── GOOGLE GEMINI (free) ──────────────────────────────────────────────────────
 async function callGemini(messages, apiKey, maxTokens) {
-  // Convert Claude-style messages to Gemini format
   const contents = messages.map(m => ({
     role:  m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
-
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: {
-          maxOutputTokens: maxTokens,
-          temperature:     0.3,
-        },
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
       }),
     }
   );
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error('Gemini API error ' + res.status + ': ' + (err.error?.message || res.statusText));
+    throw new Error('Gemini error ' + res.status + ': ' + (err.error?.message || res.statusText));
   }
-
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
-// ── ANTHROPIC CLAUDE ──────────────────────────────────────────────────────────
+// ── ANTHROPIC CLAUDE (paid fallback) ─────────────────────────────────────────
 async function callAnthropic(messages, apiKey, maxTokens) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:  'POST',
@@ -74,17 +60,27 @@ async function callAnthropic(messages, apiKey, maxTokens) {
       messages,
     }),
   });
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error('Anthropic API error ' + res.status + ': ' + (err.error?.message || res.statusText));
+    throw new Error('Anthropic error ' + res.status + ': ' + (err.error?.message || res.statusText));
   }
-
   const data = await res.json();
   return data.content.map(c => c.text || '').join('');
 }
 
-// ── PAGE FETCH (for recipe import from websites) ───────────────────────────────
+// ── METRIC CONVERSION PROMPT ──────────────────────────────────────────────────
+// Used by drive.js and app.js when extracting recipes
+const METRIC_INSTRUCTION = `IMPORTANT - Convert all measurements to metric:
+- cups/tablespoons/teaspoons of dry ingredients (flour, sugar, oats etc) → grams (g)
+- cups of liquids → millilitres (ml)
+- oz/lbs of food → grams (g) or kilograms (kg)
+- Fahrenheit temperatures → Celsius (°C)
+- inches → centimetres (cm)
+- Keep metric measurements as-is (already g, ml, kg, °C)
+- Keep "pinch", "handful", "to taste" as-is — no conversion needed
+- For common conversions: 1 cup flour ≈ 120g, 1 cup sugar ≈ 200g, 1 cup butter ≈ 225g, 1 cup milk ≈ 240ml, 1 tbsp ≈ 15ml, 1 tsp ≈ 5ml`;
+
+// ── PAGE FETCH (for recipe import from websites) ──────────────────────────────
 async function fetchPageContent(url) {
   try {
     const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
@@ -101,4 +97,36 @@ async function fetchPageContent(url) {
   } catch(e) {
     return '';
   }
+}
+
+// ── METRIC EXTRACTION HELPER ──────────────────────────────────────────────────
+// Call this instead of callClaude for recipe extraction — adds metric conversion
+async function extractRecipeWithAI(recipeNameHint, cuisineHint, pdfText) {
+  const prompt = `Extract this recipe and return ONLY valid JSON (no markdown, no explanation):
+{
+  "name": "",
+  "time": "",
+  "servings": 4,
+  "ingredients": [{"amount": "", "item": ""}],
+  "steps": [""],
+  "nutrition": null
+}
+
+Recipe name: "${recipeNameHint}"
+Cuisine: "${cuisineHint || 'Unknown'}"
+PDF text: ${pdfText ? pdfText.slice(0, 3000) : '(no text — use your culinary knowledge of this recipe)'}
+
+${METRIC_INSTRUCTION}
+
+If PDF text is missing or unclear, use your culinary knowledge to provide typical ingredients and steps for "${recipeNameHint}".
+Always return valid JSON.`;
+
+  const raw = await callClaude([{ role: 'user', content: prompt }]);
+  return JSON.parse(raw.replace(/```json|```/g, '').trim());
+}
+
+async function importRecipeFromURL(prompt) {
+  const fullPrompt = prompt + '\n\n' + METRIC_INSTRUCTION;
+  const raw = await callClaude([{ role: 'user', content: fullPrompt }]);
+  return JSON.parse(raw.replace(/```json|```/g, '').trim());
 }
