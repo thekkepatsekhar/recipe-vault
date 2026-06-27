@@ -1015,6 +1015,12 @@ async function executeDeleteRecipe() {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────────────────────
+function toggleKeyVisibility(fieldId) {
+  const field = document.getElementById(fieldId);
+  if (!field) return;
+  field.type = field.type === 'password' ? 'text' : 'password';
+}
+
 function saveGeminiKey() {
   const field = document.getElementById('gemini-key');
   if (!field) return;
