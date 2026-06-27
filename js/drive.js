@@ -553,28 +553,6 @@ async function aiParseRecipe(text, file) {
 
   try {
     const parsed = await extractRecipeWithAI(name, file.cuisine || 'Unknown', text);
-Recipe name from filename: "${name}"
-Cuisine folder: "${file.cuisine || 'Unknown'}"
-
-PDF text content:
-${text.slice(0, 4000)}
-
-Extract and return ONLY valid JSON (no markdown, no explanation):
-{
-  "name": "recipe name",
-  "time": "cook time or — if unknown",
-  "servings": 4,
-  "ingredients": [{"amount": "200g", "item": "pasta"}, ...],
-  "steps": ["Step 1...", "Step 2...", ...],
-  "nutrition": {"calories": 400, "protein": 20, "carbs": 50, "fat": 10}
-}
-
-IMPORTANT: 
-- If you cannot find ingredients in the text, use your knowledge of "${name}" to suggest typical ingredients
-- If you cannot find steps, use your knowledge of "${name}" to suggest typical steps  
-- nutrition can be null if not mentioned
-- Always return valid JSON even if you have to guess based on the recipe name`
-    }]);
     
     return {
       id: 'drive_' + file.id,
