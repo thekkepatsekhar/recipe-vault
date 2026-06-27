@@ -260,20 +260,32 @@
             </div>
           </div>
           <div class="settings-group">
-            <div class="settings-label">AI features (recipe import &amp; extraction)</div>
-            <div class="settings-row">
-              <span class="settings-row-label">Anthropic API key</span>
-            </div>
-            <div style="padding:0 16px 14px">
-              <input class="settings-input" id="anthropic-key" type="password"
-                placeholder="sk-ant-..." style="width:100%;text-align:left"
-                value="" />
-              <div style="font-size:12px;color:var(--clr-muted);margin-top:6px;line-height:1.5">
-                Get a free key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>. Stored only on your device.
-              </div>
-              <button class="btn-primary" style="margin-top:10px;padding:9px 20px;font-size:13px" onclick="saveAnthropicKey()">Save key</button>
-            </div>
-          </div>
+  <div class="settings-label">AI features (recipe import &amp; extraction)</div>
+
+  <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+      <span class="settings-row-label">🆓 Google Gemini <span style="font-size:11px;color:var(--clr-coral);font-weight:600">FREE</span></span>
+    </div>
+    <div style="font-size:12px;color:var(--clr-muted);line-height:1.5">Free tier at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--clr-coral)">aistudio.google.com</a> — recommended!</div>
+    <div style="display:flex;gap:8px;width:100%">
+      <input class="settings-input" id="gemini-key" type="password" placeholder="AIza..." style="flex:1;width:auto;text-align:left" />
+      <button class="btn-primary" style="padding:8px 14px;font-size:13px;flex-shrink:0" onclick="saveGeminiKey()">Save</button>
+    </div>
+    <div id="gemini-key-status" style="font-size:12px;color:var(--clr-muted)"></div>
+  </div>
+
+  <div style="border-top:1px solid var(--clr-border);margin:0 16px"></div>
+
+  <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding-top:14px">
+    <span class="settings-row-label">Anthropic key <span style="font-size:11px;color:var(--clr-muted);font-weight:400">(paid, fallback only)</span></span>
+    <div style="font-size:12px;color:var(--clr-muted);line-height:1.5">Only used if no Gemini key is set.</div>
+    <div style="display:flex;gap:8px;width:100%">
+      <input class="settings-input" id="anthropic-key" type="password" placeholder="sk-ant-..." style="flex:1;width:auto;text-align:left" />
+      <button class="btn-primary" style="padding:8px 14px;font-size:13px;flex-shrink:0" onclick="saveAnthropicKey()">Save</button>
+    </div>
+  </div>
+
+</div>
             <div class="settings-row">
               <span class="settings-row-label">Read steps aloud</span>
               <label class="toggle"><input type="checkbox" id="voice-read" checked /><span class="toggle-track"></span></label>
