@@ -21,12 +21,14 @@ async function callClaude(messages, maxTokens = 1500) {
 
 // ── GOOGLE GEMINI (free) ──────────────────────────────────────────────────────
 async function callGemini(messages, apiKey, maxTokens) {
+  // Model name stored in settings so it can be updated without code changes
+  const model    = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
   const contents = messages.map(m => ({
     role:  m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
   const res = await fetch(
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + apiKey,
+    'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey,
     {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
