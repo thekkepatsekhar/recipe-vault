@@ -753,8 +753,7 @@ Page content: ${pageContent}`
 URL: ${url}`;
     }
 
-    const text   = await callClaude([{ role: 'user', content: prompt }]);
-    const recipe = JSON.parse(text.replace(/```json|```/g, '').trim());
+    const recipe = await importRecipeFromURL(prompt);
 
     document.getElementById('imp-name')        && (document.getElementById('imp-name').value        = recipe.name     || '');
     document.getElementById('imp-cuisine')     && (document.getElementById('imp-cuisine').value     = recipe.cuisine  || '');
