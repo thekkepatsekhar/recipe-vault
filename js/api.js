@@ -101,43 +101,62 @@ const METRIC_INSTRUCTION = `IMPORTANT - Convert measurements to metric where app
 
 // ── PAGE FETCH (for recipe import from websites) ──────────────────────────────
 async function fetchPageContent(url) {
+  // allorigins.win works best for sites that block other proxies
   try {
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error('Fetch failed');
-    const html = await res.text();
-
-    // Try to extract structured recipe data first (JSON-LD schema)
-    const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-    if (jsonLdMatch) {
-      for (const block of jsonLdMatch) {
-        const content = block.replace(/<script[^>]*>/, '').replace(/<\/script>/, '').trim();
-        try {
-          const data = JSON.parse(content);
-          const recipe = Array.isArray(data) ? data.find(d => d['@type'] === 'Recipe') : (data['@type'] === 'Recipe' ? data : null);
-          if (recipe) {
-            // Found structured recipe data — return it as clean text
-            const ingredients = (recipe.recipeIngredient || []).join('\n');
-            const instructions = (recipe.recipeInstructions || [])
-              .map(i => typeof i === 'string' ? i : i.text || '')
-              .join('\n');
-            return `STRUCTURED RECIPE DATA:\nName: ${recipe.name || ''}\nTime: ${recipe.totalTime || recipe.cookTime || ''}\nServings: ${recipe.recipeYield || ''}\n\nINGREDIENTS:\n${ingredients}\n\nINSTRUCTIONS:\n${instructions}`;
-          }
-        } catch(e) {}
+    const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+    if (res.ok) {
+      const json = await res.json();
+      const html = json.contents || '';
+      if (html.length > 200) {
+        return extractRecipeText(html);
       }
     }
+  } catch(e) { console.warn('allorigins failed:', e.message); }
 
-    // Fall back to plain text extraction
-    return html
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-      .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')
-      .replace(/\s{2,}/g, ' ').trim().slice(0, 4000);
-  } catch(e) {
-    return '';
+  // Fall back to corsproxy.io
+  try {
+    const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+    if (res.ok) {
+      const html = await res.text();
+      if (html.length > 200) {
+        return extractRecipeText(html);
+      }
+    }
+  } catch(e) { console.warn('corsproxy failed:', e.message); }
+
+  return '';
+}
+
+function extractRecipeText(html) {
+  // Try JSON-LD structured data first (most reliable)
+  const jsonLdMatches = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  for (const block of jsonLdMatches) {
+    const content = block.replace(/<script[^>]*>/i, '').replace(/<\/script>/i, '').trim();
+    try {
+      const data = JSON.parse(content);
+      const items = Array.isArray(data) ? data : [data];
+      const recipe = items.find(d => d['@type'] === 'Recipe' ||
+        (Array.isArray(d['@type']) && d['@type'].includes('Recipe')));
+      if (recipe) {
+        const ingredients = (recipe.recipeIngredient || []).join('\n');
+        const instructions = (recipe.recipeInstructions || [])
+          .map(i => typeof i === 'string' ? i : (i.text || i.name || ''))
+          .filter(Boolean).join('\n');
+        if (ingredients || instructions) {
+          return `STRUCTURED RECIPE:\nName: ${recipe.name || ''}\nTime: ${recipe.totalTime || recipe.cookTime || ''}\nServings: ${recipe.recipeYield || ''}\n\nINGREDIENTS:\n${ingredients}\n\nSTEPS:\n${instructions}`;
+        }
+      }
+    } catch(e) {}
   }
+
+  // Fall back to plain text
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')
+    .replace(/\s{2,}/g, ' ').trim().slice(0, 5000);
 }
 
 // ── METRIC EXTRACTION HELPER ──────────────────────────────────────────────────
