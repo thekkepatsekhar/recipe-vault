@@ -210,11 +210,15 @@ async function importRecipeFromURL(prompt) {
 }
 
 // ── YOUTUBE DATA API ──────────────────────────────────────────────────────────
-const YOUTUBE_API_KEY = 'AIzaSyBhI6e1oXfJCXxIfClzHTEhmvd2a6njXuc';
+// Key is stored in localStorage (set in Settings) — never hardcoded in source
 
 async function fetchYouTubeDetails(url) {
-  // Extract video ID from any YouTube URL format
-  // Handles: youtu.be/ID, youtube.com/watch?v=ID, /shorts/ID, /embed/ID
+  const apiKey = localStorage.getItem('rv_youtube_key');
+  if (!apiKey) {
+    console.warn('No YouTube API key set — falling back to URL-only extraction');
+    return null;
+  }
+
   const match = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&?/\s]{11})/);
   if (!match) return null;
   const videoId = match[1];
@@ -222,7 +226,7 @@ async function fetchYouTubeDetails(url) {
   try {
     const res = await fetch(
       'https://www.googleapis.com/youtube/v3/videos?part=snippet&id=' +
-      videoId + '&key=' + YOUTUBE_API_KEY
+      videoId + '&key=' + apiKey
     );
     if (!res.ok) throw new Error('YouTube API ' + res.status);
     const data = await res.json();
