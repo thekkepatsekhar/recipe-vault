@@ -14,9 +14,25 @@ function getActiveAI() {
 async function callClaude(messages, maxTokens = 1500) {
   const ai = getActiveAI();
   if (!ai) throw new Error('No API key set — add a Gemini or Anthropic key in Settings');
-  return ai.provider === 'gemini'
-    ? callGemini(messages, ai.key, maxTokens)
-    : callAnthropic(messages, ai.key, maxTokens);
+
+  if (ai.provider === 'gemini') {
+    try {
+      return await callGemini(messages, ai.key, maxTokens);
+    } catch(e) {
+      // If Gemini hits quota (429) or model error, fall back to Anthropic
+      if (e.message.includes('429') || e.message.includes('quota') || e.message.includes('not found')) {
+        const anthropicKey = localStorage.getItem('rv_anthropic_key');
+        if (anthropicKey) {
+          console.log('Gemini failed, falling back to Anthropic:', e.message);
+          showToast('Gemini limit reached — using Anthropic backup');
+          return await callAnthropic(messages, anthropicKey, maxTokens);
+        }
+      }
+      throw e;
+    }
+  }
+
+  return callAnthropic(messages, ai.key, maxTokens);
 }
 
 // ── GOOGLE GEMINI (free) ──────────────────────────────────────────────────────
@@ -132,4 +148,35 @@ async function importRecipeFromURL(prompt) {
   const fullPrompt = prompt + '\n\n' + METRIC_INSTRUCTION;
   const raw = await callClaude([{ role: 'user', content: fullPrompt }]);
   return JSON.parse(raw.replace(/```json|```/g, '').trim());
+}
+
+// ── YOUTUBE DATA API ──────────────────────────────────────────────────────────
+const YOUTUBE_API_KEY = 'AIzaSyBhI6e1oXfJCXxIfClzHTEhmvd2a6njXuc';
+
+async function fetchYouTubeDetails(url) {
+  // Extract video ID from any YouTube URL format
+  // Handles: youtu.be/ID, youtube.com/watch?v=ID, /shorts/ID, /embed/ID
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&?/\s]{11})/);
+  if (!match) return null;
+  const videoId = match[1];
+
+  try {
+    const res = await fetch(
+      'https://www.googleapis.com/youtube/v3/videos?part=snippet&id=' +
+      videoId + '&key=' + YOUTUBE_API_KEY
+    );
+    if (!res.ok) throw new Error('YouTube API ' + res.status);
+    const data = await res.json();
+    const item = data.items?.[0]?.snippet;
+    if (!item) return null;
+    return {
+      title:       item.title        || '',
+      description: item.description  || '',
+      channel:     item.channelTitle || '',
+      videoId,
+    };
+  } catch(e) {
+    console.warn('YouTube API failed:', e.message);
+    return null;
+  }
 }
