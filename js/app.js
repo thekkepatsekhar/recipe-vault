@@ -65,6 +65,7 @@ function navigate(screen) {
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
+  if (screen === 'import')   resetImport();
   if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
 }
 
@@ -840,8 +841,18 @@ function guessEmoji(cuisine){
   const map={italian:'🍝',mexican:'🌮',japanese:'🍣',chinese:'🥢',indian:'🍛',french:'🥐',thai:'🍜',vietnamese:'🍜',american:'🍔',greek:'🫒',spanish:'🥘',korean:'🍱',bread:'🍞',dessert:'🍰',soup:'🍲',salad:'🥗',seafood:'🐟'};
   return map[(cuisine||'').toLowerCase()]||'🍽️';
 }
-function resetImport(){
-  const url=document.getElementById('import-url');if(url)url.value='';
+function resetImport() {
+  // Clear URL
+  const url = document.getElementById('import-url');
+  if (url) url.value = '';
+  // Clear all recipe fields
+  ['imp-name','imp-cuisine','imp-time','imp-ingredients','imp-steps'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const servings = document.getElementById('imp-servings');
+  if (servings) servings.value = '4';
+  // Hide preview and error
   document.getElementById('import-preview')?.classList.add('hidden');
   document.getElementById('import-error')?.classList.add('hidden');
 }
