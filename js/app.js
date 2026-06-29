@@ -747,9 +747,13 @@ async function extractRecipe() {
       // Use YouTube Data API to fetch real title and description
       showToast('Fetching video details…');
       const yt = await fetchYouTubeDetails(url);
+      console.log('YouTube API result:', yt);
 
       if (yt) {
-        const descSnippet = yt.description.slice(0, 3000);
+        // Limit description to 1500 chars to avoid token overflow
+        const descSnippet = yt.description.slice(0, 1500);
+        console.log('Video title:', yt.title);
+        console.log('Description length:', yt.description.length);
         prompt = `Extract the recipe from this YouTube video and return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 
@@ -762,7 +766,7 @@ If the description contains a recipe, extract it exactly.
 If not, use your culinary knowledge of "${yt.title}" to generate a typical recipe.`;
         showToast('Got video details — extracting recipe…');
       } else {
-        // Fall back to URL-only guess if API fails
+        console.log('YouTube API returned no results — falling back to URL guess');
         const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/\s]{11})/)?.[1] || '';
         prompt = `A user wants to import a recipe from this YouTube video: ${url}
 ${videoId ? `Video ID: ${videoId}` : ''}
