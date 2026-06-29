@@ -750,21 +750,65 @@ async function extractRecipe() {
       console.log('YouTube API result:', yt);
 
       if (yt) {
-        // Limit description to 1500 chars to avoid token overflow
-        const descSnippet = yt.description.slice(0, 1500);
-        console.log('Video title:', yt.title);
-        console.log('Description length:', yt.description.length);
-        prompt = `Extract the recipe from this YouTube video and return ONLY valid JSON (no markdown):
+        // Check if description contains a recipe website link
+        // Many YouTubers (Andy Cooks etc) link to their recipe site instead of listing ingredients
+        const urlRegex = /https?:\/\/[^\s]+/g;
+        const descUrls = yt.description.match(urlRegex) || [];
+        const recipeUrl = descUrls.find(u =>
+          !u.includes('youtube') &&
+          !u.includes('instagram') &&
+          !u.includes('twitter') &&
+          !u.includes('facebook') &&
+          !u.includes('tiktok') &&
+          !u.includes('patreon') &&
+          !u.includes('spotify') &&
+          !u.includes('apple') &&
+          !u.includes('amzn') &&
+          u.length < 150
+        );
+
+        if (recipeUrl) {
+          // Found a recipe website link — fetch from there instead
+          showToast('Found recipe website — fetching…');
+          console.log('Following recipe URL from description:', recipeUrl);
+          try {
+            const pageContent = await fetchPageContent(recipeUrl);
+            if (pageContent && pageContent.length > 200) {
+              prompt = `Extract the recipe from this webpage. Return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
-
-Video title: "${yt.title}"
-Channel: "${yt.channel}"
-Video description:
-${descSnippet}
-
-If the description contains a recipe, extract it exactly.
-If not, use your culinary knowledge of "${yt.title}" to generate a typical recipe.`;
-        showToast('Got video details — extracting recipe…');
+Recipe page from video "${yt.title}" by ${yt.channel}:
+${pageContent.slice(0, 2000)}`;
+              showToast('Got recipe page — extracting…');
+            } else {
+              throw new Error('Page content too short');
+            }
+          } catch(e) {
+            // Fall back to description
+            console.log('Could not fetch recipe URL, using description:', e.message);
+            const descSnippet = yt.description.slice(0, 1500);
+            prompt = `Extract the recipe from this YouTube video. Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+Video: "${yt.title}" by ${yt.channel}
+Use your culinary knowledge to generate a typical recipe for "${yt.title}".`;
+          }
+        } else {
+          // No external link — use description directly or AI knowledge
+          const descSnippet = yt.description.slice(0, 1500);
+          const hasRecipeInDesc = /ingredient|tbsp|tsp|cup|gram|ml|oz|\d+g\b/i.test(descSnippet);
+          if (hasRecipeInDesc) {
+            prompt = `Extract the recipe from this YouTube video description. Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+Video: "${yt.title}" by ${yt.channel}
+Description: ${descSnippet}`;
+          } else {
+            // Description has no recipe — use AI knowledge
+            prompt = `Generate a recipe for this YouTube video. Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+Video title: "${yt.title}" by ${yt.channel}
+Use your culinary knowledge to create an accurate recipe for "${yt.title}".`;
+          }
+        }
+        showToast('Extracting recipe…');
       } else {
         console.log('YouTube API returned no results — falling back to URL guess');
         const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/\s]{11})/)?.[1] || '';
