@@ -106,13 +106,35 @@ async function fetchPageContent(url) {
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error('Fetch failed');
     const html = await res.text();
+
+    // Try to extract structured recipe data first (JSON-LD schema)
+    const jsonLdMatch = html.match(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+    if (jsonLdMatch) {
+      for (const block of jsonLdMatch) {
+        const content = block.replace(/<script[^>]*>/, '').replace(/<\/script>/, '').trim();
+        try {
+          const data = JSON.parse(content);
+          const recipe = Array.isArray(data) ? data.find(d => d['@type'] === 'Recipe') : (data['@type'] === 'Recipe' ? data : null);
+          if (recipe) {
+            // Found structured recipe data — return it as clean text
+            const ingredients = (recipe.recipeIngredient || []).join('\n');
+            const instructions = (recipe.recipeInstructions || [])
+              .map(i => typeof i === 'string' ? i : i.text || '')
+              .join('\n');
+            return `STRUCTURED RECIPE DATA:\nName: ${recipe.name || ''}\nTime: ${recipe.totalTime || recipe.cookTime || ''}\nServings: ${recipe.recipeYield || ''}\n\nINGREDIENTS:\n${ingredients}\n\nINSTRUCTIONS:\n${instructions}`;
+          }
+        } catch(e) {}
+      }
+    }
+
+    // Fall back to plain text extraction
     return html
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, ' ')
-      .replace(/\s{2,}/g, ' ').trim().slice(0, 6000);
+      .replace(/\s{2,}/g, ' ').trim().slice(0, 4000);
   } catch(e) {
     return '';
   }
