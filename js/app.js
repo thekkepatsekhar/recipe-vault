@@ -91,6 +91,8 @@ function renderSettings() {
   }
   const gemModel = document.getElementById('gemini-model');
   if (gemModel) gemModel.value = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
+  const ytField = document.getElementById('youtube-key');
+  if (ytField) ytField.value = localStorage.getItem('rv_youtube_key') || '';
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -1088,6 +1090,19 @@ function toggleKeyVisibility(fieldId) {
   const field = document.getElementById(fieldId);
   if (!field) return;
   field.type = field.type === 'password' ? 'text' : 'password';
+}
+
+function saveYouTubeKey() {
+  const field = document.getElementById('youtube-key');
+  if (!field) return;
+  const key = field.value.trim();
+  if (!key) {
+    localStorage.removeItem('rv_youtube_key');
+    showToast('YouTube key cleared');
+    return;
+  }
+  localStorage.setItem('rv_youtube_key', key);
+  showToast('YouTube key saved ✓');
 }
 
 function saveGeminiKey() {
