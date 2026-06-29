@@ -146,8 +146,26 @@ Always return valid JSON.`;
 
 async function importRecipeFromURL(prompt) {
   const fullPrompt = prompt + '\n\n' + METRIC_INSTRUCTION;
-  const raw = await callClaude([{ role: 'user', content: fullPrompt }]);
-  return JSON.parse(raw.replace(/```json|```/g, '').trim());
+  const raw = await callClaude([{ role: 'user', content: fullPrompt }], 2500);
+  // Clean and fix potentially truncated JSON
+  let cleaned = raw.replace(/```json|```/g, '').trim();
+  // If JSON is truncated, try to close it gracefully
+  if (!cleaned.endsWith('}')) {
+    // Find the last complete field and close the JSON
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (lastBrace > 0) {
+      cleaned = cleaned.slice(0, lastBrace + 1);
+      // Make sure arrays are closed
+      while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) {
+        cleaned += ']';
+      }
+      // Make sure object is closed
+      while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) {
+        cleaned += '}';
+      }
+    }
+  }
+  return JSON.parse(cleaned);
 }
 
 // ── YOUTUBE DATA API ──────────────────────────────────────────────────────────
