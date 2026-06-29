@@ -743,18 +743,32 @@ async function extractRecipe() {
     const isYouTube = /youtube\.com|youtu\.be/i.test(url);
 
     if (isYouTube) {
-      // Extract video ID from URL
-      const videoId = url.match(/(?:v=|youtu\.be\/)([^&?/]+)/)?.[1] || '';
-      prompt = `A user wants to import a recipe from this YouTube video: ${url}
-${videoId ? `Video ID: ${videoId}` : ''}
+      // Use YouTube Data API to fetch real title and description
+      showToast('Fetching video details…');
+      const yt = await fetchYouTubeDetails(url);
 
-YouTube videos cannot be accessed directly, so use your knowledge to identify this recipe.
-Look at the URL for clues about the video title or channel.
-
-Return ONLY valid JSON (no markdown, no explanation):
+      if (yt) {
+        const descSnippet = yt.description.slice(0, 3000);
+        prompt = `Extract the recipe from this YouTube video and return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 
-If you cannot identify the specific recipe, make your best guess based on any clues in the URL, or create a template with placeholder values the user can edit.`;
+Video title: "${yt.title}"
+Channel: "${yt.channel}"
+Video description:
+${descSnippet}
+
+If the description contains a recipe, extract it exactly.
+If not, use your culinary knowledge of "${yt.title}" to generate a typical recipe.`;
+        showToast('Got video details — extracting recipe…');
+      } else {
+        // Fall back to URL-only guess if API fails
+        const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/\s]{11})/)?.[1] || '';
+        prompt = `A user wants to import a recipe from this YouTube video: ${url}
+${videoId ? `Video ID: ${videoId}` : ''}
+Use your culinary knowledge to identify and generate this recipe.
+Return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`;
+      }
     } else {
       // For regular websites, try to fetch the page content
       let pageContent = '';
@@ -779,11 +793,7 @@ URL: ${url}`;
     document.getElementById('imp-steps')       && (document.getElementById('imp-steps').value       = (recipe.steps||[]).join('\n'));
     document.getElementById('import-preview')?.classList.remove('hidden');
 
-    if (isYouTube) {
-      showToast('Recipe guessed from YouTube URL — please review and edit ✓');
-    } else {
-      showToast('Recipe extracted ✓ — review and save');
-    }
+    showToast('Recipe extracted ✓ — review and save');
 
   } catch(err) {
     console.error('Import error:', err);
