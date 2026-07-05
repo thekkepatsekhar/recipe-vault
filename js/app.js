@@ -430,32 +430,47 @@ async function reExtractCurrentRecipe() {
   if (!state.currentRecipe||!state.currentRecipe.driveFileId) return;
   showToast('Extracting recipe with AI…');
   try {
-    const text=await extractPDFText(state.currentRecipe.driveFileId);
-    const raw=await callClaude([{
-      role:'user',
-      content:`Extract this recipe and return ONLY valid JSON (no markdown):
+    const text = await extractPDFText(state.currentRecipe.driveFileId);
+    const raw  = await callClaude([{
+      role: 'user',
+      content: `Extract this recipe and return ONLY valid JSON (no markdown):
 {"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""],"nutrition":null}
 Recipe name: "${state.currentRecipe.name}"
 Cuisine: "${state.currentRecipe.cuisine}"
-PDF text: ${text||'(no text — use your knowledge of this recipe name)'}
+PDF text: ${text ? text.slice(0, 2000) : '(no text — use your knowledge of this recipe name)'}
 IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ingredients and steps for "${state.currentRecipe.name}".`
-    }]);
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    state.currentRecipe.ingredients=parsed.ingredients||[];
-    state.currentRecipe.steps=parsed.steps||[];
-    state.currentRecipe.nutrition=parsed.nutrition||null;
-    if (parsed.time&&parsed.time!=='—') state.currentRecipe.time=parsed.time;
-    if (parsed.servings){state.currentRecipe.servings=parsed.servings;state.baseServings=parsed.servings;state.currentServings=parsed.servings;}
-    const idx=state.recipes.findIndex(r=>r.id===state.currentRecipe.id);
-    if (idx!==-1) state.recipes[idx]={...state.recipes[idx],...state.currentRecipe};
-    const cache=getCachedRecipes();
-    cache['drive_'+state.currentRecipe.driveFileId]=state.currentRecipe;
+    }], 2500);
+
+    // Repair potentially truncated JSON
+    let cleaned = raw.replace(/```json|```/g, '').trim();
+    if (!cleaned.endsWith('}')) {
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (lastBrace > 0) {
+        cleaned = cleaned.slice(0, lastBrace + 1);
+        while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
+        while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
+      }
+    }
+    const parsed = JSON.parse(cleaned);
+
+    state.currentRecipe.ingredients = parsed.ingredients || [];
+    state.currentRecipe.steps       = parsed.steps       || [];
+    state.currentRecipe.nutrition   = parsed.nutrition   || null;
+    if (parsed.time && parsed.time !== '—') state.currentRecipe.time = parsed.time;
+    if (parsed.servings) { state.currentRecipe.servings = parsed.servings; state.baseServings = parsed.servings; state.currentServings = parsed.servings; }
+
+    const idx = state.recipes.findIndex(r => r.id === state.currentRecipe.id);
+    if (idx !== -1) state.recipes[idx] = { ...state.recipes[idx], ...state.currentRecipe };
+
+    const cache = getCachedRecipes();
+    cache['drive_' + state.currentRecipe.driveFileId] = state.currentRecipe;
     saveCachedRecipes(cache);
-    renderIngredients();renderSteps(state.currentRecipe.steps);renderNutrition(state.currentRecipe.nutrition);
+
+    renderIngredients(); renderSteps(state.currentRecipe.steps); renderNutrition(state.currentRecipe.nutrition);
     showToast('Recipe extracted ✓');
   } catch(e) {
-    console.error('Re-extract failed:',e);
-    showToast('Extraction failed: '+e.message);
+    console.error('Re-extract failed:', e);
+    showToast('Extraction failed: ' + e.message);
   }
 }
 
