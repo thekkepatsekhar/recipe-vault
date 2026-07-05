@@ -174,15 +174,25 @@ async function extractRecipeWithAI(recipeNameHint, cuisineHint, pdfText) {
 
 Recipe name: "${recipeNameHint}"
 Cuisine: "${cuisineHint || 'Unknown'}"
-PDF text: ${pdfText ? pdfText.slice(0, 3000) : '(no text — use your culinary knowledge of this recipe)'}
+PDF text: ${pdfText ? pdfText.slice(0, 2000) : '(no text — use your culinary knowledge of this recipe)'}
 
 ${METRIC_INSTRUCTION}
 
 If PDF text is missing or unclear, use your culinary knowledge to provide typical ingredients and steps for "${recipeNameHint}".
 Always return valid JSON.`;
 
-  const raw = await callClaude([{ role: 'user', content: prompt }]);
-  return JSON.parse(raw.replace(/```json|```/g, '').trim());
+  const raw     = await callClaude([{ role: 'user', content: prompt }], 2500);
+  // Repair potentially truncated JSON
+  let cleaned   = raw.replace(/```json|```/g, '').trim();
+  if (!cleaned.endsWith('}')) {
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (lastBrace > 0) {
+      cleaned = cleaned.slice(0, lastBrace + 1);
+      while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
+      while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
+    }
+  }
+  return JSON.parse(cleaned);
 }
 
 async function importRecipeFromURL(prompt) {
