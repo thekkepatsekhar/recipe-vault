@@ -439,7 +439,50 @@ async function extractPDFText(fileId, mimeType) {
     } catch(e) { return ''; }
   }
 
-  // PDFs — download and extract text from binary
+  // PDFs — try Drive's built-in OCR/text extraction first
+  // This works much better than our manual binary parser for "Print to PDF" files
+  try {
+    // Copy the PDF to a temp Google Doc to extract text via Drive's built-in engine
+    const copyRes = await fetch(
+      'https://www.googleapis.com/drive/v3/files/' + fileId + '/copy',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + drive.accessToken,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mimeType: 'application/vnd.google-apps.document',
+        }),
+      }
+    );
+    if (copyRes.ok) {
+      const copyData = await copyRes.json();
+      const tempId = copyData.id;
+      // Export the temp doc as plain text
+      try {
+        const text = await gfetchText(
+          'https://www.googleapis.com/drive/v3/files/' + tempId + '/export?mimeType=text/plain'
+        );
+        // Delete the temp file
+        fetch('https://www.googleapis.com/drive/v3/files/' + tempId, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + drive.accessToken },
+        }).catch(() => {});
+        if (text && text.trim().length > 20) return text;
+      } catch(e) {
+        // Delete temp file even if export failed
+        fetch('https://www.googleapis.com/drive/v3/files/' + tempId, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + drive.accessToken },
+        }).catch(() => {});
+      }
+    }
+  } catch(e) {
+    console.warn('Drive PDF->Doc conversion failed, falling back to binary parser:', e.message);
+  }
+
+  // Fall back to basic binary text extraction
   try {
     const res = await fetch(
       'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
