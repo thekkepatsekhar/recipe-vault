@@ -65,7 +65,7 @@ function navigate(screen) {
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
-  if (screen === 'import')   resetImport();
+  if (screen === 'import')   { resetImport(); switchImportTab('url'); }
   if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
 }
 
@@ -727,7 +727,104 @@ function generatePlannerList(mode){
   saveShoppingList();updateShoppingBadge();navigate('shopping');showToast('Shopping list ready ✓');
 }
 
-// ── IMPORT ────────────────────────────────────────────────────────────────────
+// ── IMPORT TAB SWITCHING ──────────────────────────────────────────────────────
+function switchImportTab(tab) {
+  const urlTab   = document.getElementById('import-tab-url');
+  const pasteTab = document.getElementById('import-tab-paste');
+  const urlBtn   = document.getElementById('tab-url');
+  const pasteBtn = document.getElementById('tab-paste');
+
+  if (tab === 'url') {
+    urlTab?.classList.remove('hidden');
+    pasteTab?.classList.add('hidden');
+    if (urlBtn)   { urlBtn.style.background = 'var(--clr-ink)'; urlBtn.style.color = 'white'; urlBtn.style.fontWeight = '600'; }
+    if (pasteBtn) { pasteBtn.style.background = 'transparent'; pasteBtn.style.color = 'var(--clr-muted)'; pasteBtn.style.fontWeight = '500'; }
+  } else {
+    urlTab?.classList.add('hidden');
+    pasteTab?.classList.remove('hidden');
+    if (pasteBtn) { pasteBtn.style.background = 'var(--clr-ink)'; pasteBtn.style.color = 'white'; pasteBtn.style.fontWeight = '600'; }
+    if (urlBtn)   { urlBtn.style.background = 'transparent'; urlBtn.style.color = 'var(--clr-muted)'; urlBtn.style.fontWeight = '500'; }
+  }
+}
+
+async function extractFromPastedText() {
+  const text = document.getElementById('paste-text')?.value.trim();
+  if (!text || text.length < 20) { showToast('Please paste some recipe text first'); return; }
+
+  document.getElementById('paste-loading')?.classList.remove('hidden');
+  document.getElementById('paste-error')?.classList.add('hidden');
+  document.getElementById('paste-preview')?.classList.add('hidden');
+
+  try {
+    const prompt = `Structure this recipe text and return ONLY valid JSON (no markdown):
+{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
+
+Recipe text:
+${text.slice(0, 4000)}`;
+
+    const recipe = await importRecipeFromURL(prompt);
+
+    document.getElementById('paste-name')        && (document.getElementById('paste-name').value        = recipe.name     || '');
+    document.getElementById('paste-cuisine')     && (document.getElementById('paste-cuisine').value     = recipe.cuisine  || '');
+    document.getElementById('paste-time')        && (document.getElementById('paste-time').value        = recipe.time     || '');
+    document.getElementById('paste-servings')    && (document.getElementById('paste-servings').value    = recipe.servings || 4);
+    document.getElementById('paste-ingredients') && (document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n'));
+    document.getElementById('paste-steps')       && (document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n'));
+    document.getElementById('paste-preview')?.classList.remove('hidden');
+    showToast('Recipe structured ✓ — review and save');
+  } catch(e) {
+    const el = document.getElementById('paste-error');
+    if (el) { el.textContent = 'Could not structure recipe: ' + e.message; el.classList.remove('hidden'); }
+  } finally {
+    document.getElementById('paste-loading')?.classList.add('hidden');
+  }
+}
+
+async function savePastedRecipe() {
+  const name     = (document.getElementById('paste-name')?.value        || '').trim();
+  const cuisine  = (document.getElementById('paste-cuisine')?.value     || '').trim() || 'Other';
+  const time     = (document.getElementById('paste-time')?.value        || '').trim();
+  const servings = parseInt(document.getElementById('paste-servings')?.value || '4') || 4;
+  const ings     = (document.getElementById('paste-ingredients')?.value || '').trim().split('\n').filter(Boolean);
+  const steps    = (document.getElementById('paste-steps')?.value       || '').trim().split('\n').filter(Boolean);
+
+  if (!name) { document.getElementById('paste-name')?.focus(); showToast('Please enter a recipe name'); return; }
+
+  const newRecipe = {
+    id: 'imported_' + Date.now(), name, cuisine, emoji: guessEmoji(cuisine),
+    time: time || 'Unknown', servings, cloudPath: '', tags: ['Imported'],
+    ingredients: ings.map(line => {
+      const m = line.match(/^([\d.\/]+\s*(?:g|kg|ml|l|tsp|tbsp|cup|oz|lb|cloves?|bunch|pinch|large|medium|small|handful)?)\s+(.*)/i);
+      return m ? { amount: m[1].trim(), item: m[2].trim() } : { amount: '', item: line };
+    }),
+    steps, nutrition: null,
+  };
+
+  state.recipes.unshift(newRecipe);
+  buildCuisineChips(); applyFilters();
+  clearPasteTab();
+  navigate('recipes');
+
+  if (typeof saveRecipeToDrive === 'function' && drive?.isSignedIn) {
+    showToast('Saving "' + name + '" to Google Drive…');
+    try { await saveRecipeToDrive(newRecipe); } catch(e) { showToast('Drive save failed: ' + e.message); }
+  } else {
+    showToast('"' + name + '" saved locally ✓');
+  }
+}
+
+function clearPasteTab() {
+  const el = document.getElementById('paste-text');
+  if (el) el.value = '';
+  document.getElementById('paste-preview')?.classList.add('hidden');
+  document.getElementById('paste-error')?.classList.add('hidden');
+  ['paste-name','paste-cuisine','paste-time','paste-ingredients','paste-steps'].forEach(id => {
+    const f = document.getElementById(id); if (f) f.value = '';
+  });
+  const s = document.getElementById('paste-servings'); if (s) s.value = '4';
+}
+
+// ── IMPORT (URL) ──────────────────────────────────────────────────────────────
 async function extractRecipe() {
   const urlInput = document.getElementById('import-url');
   const url = urlInput?.value.trim();
@@ -824,14 +921,25 @@ Return ONLY valid JSON (no markdown):
       // For regular websites, try to fetch the page content
       let pageContent = '';
       try { pageContent = await fetchPageContent(url); } catch(e) {}
-      prompt = pageContent
-        ? `Extract the recipe from this webpage. Return ONLY valid JSON (no markdown):
+
+      if (!pageContent || pageContent.length < 100) {
+        // Cannot reach site — show error instead of hallucinating
+        const el = document.getElementById('import-error');
+        if (el) {
+          el.innerHTML = 'Could not access this website — it may block automated access (like Delish, NYT Cooking etc).<br><br>' +
+            '<strong>Try instead:</strong> Open the recipe page in your browser, select all text (Ctrl+A), copy it (Ctrl+C), then use the <strong>"Paste text"</strong> tab below to paste it directly.';
+          el.classList.remove('hidden');
+        }
+        document.getElementById('import-preview')?.classList.remove('hidden');
+        document.getElementById('import-loading')?.classList.add('hidden');
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      prompt = `Extract the recipe from this webpage. Return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 URL: ${url}
-Page content: ${pageContent}`
-        : `Extract or guess the recipe from this URL. Return ONLY valid JSON (no markdown):
-{"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
-URL: ${url}`;
+Page content: ${pageContent}`;
     }
 
     const recipe = await importRecipeFromURL(prompt);
