@@ -219,33 +219,49 @@
 
       <!-- Paste text tab -->
       <div id="import-tab-paste" class="import-card hidden">
-        <p style="font-size:13px;color:var(--clr-muted);margin-bottom:12px;line-height:1.6">
-          Can't extract from a website? Open the recipe in your browser, select all text <strong>(Ctrl+A)</strong>, copy <strong>(Ctrl+C)</strong>, then paste below. AI will structure it for you.
+        <p style="font-size:13px;color:var(--clr-muted);margin-bottom:16px;line-height:1.6">
+          Fill in the recipe details directly — paste ingredients and steps straight from the website. No AI needed.
         </p>
-        <label class="field-label">Paste recipe text here
-          <textarea class="field-input field-textarea" id="paste-text" rows="12"
-            placeholder="Paste the full recipe text here — ingredients, steps, everything..."></textarea>
+
+        <div class="import-fields-grid">
+          <label class="field-label">Recipe name <span style="color:var(--clr-coral)">*</span>
+            <input class="field-input" id="paste-name" type="text" placeholder="e.g. Garlic Butter Prawns" />
+          </label>
+          <label class="field-label">Cuisine type
+            <input class="field-input" id="paste-cuisine" type="text" placeholder="e.g. Seafood, Italian…" />
+          </label>
+          <label class="field-label">Cook time
+            <input class="field-input" id="paste-time" type="text" placeholder="e.g. 30 minutes" />
+          </label>
+          <label class="field-label">Servings
+            <input class="field-input" id="paste-servings" type="number" min="1" value="4" />
+          </label>
+        </div>
+
+        <label class="field-label" style="margin-top:4px">
+          Ingredients <span class="field-hint">— paste directly from the website, one per line</span>
+          <textarea class="field-input field-textarea" id="paste-ingredients" rows="10"
+            placeholder="2 tbsp butter&#10;4 cloves garlic, minced&#10;500g prawns, peeled&#10;..."></textarea>
         </label>
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn-primary" onclick="extractFromPastedText()" style="flex:1">✨ Structure with AI</button>
+
+        <label class="field-label" style="margin-top:8px">
+          Steps <span class="field-hint">— paste directly from the website, one per line</span>
+          <textarea class="field-input field-textarea" id="paste-steps" rows="12"
+            placeholder="Heat butter in a pan over medium heat&#10;Add garlic and cook for 1 minute&#10;Add prawns and cook until pink&#10;..."></textarea>
+        </label>
+
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn-primary" onclick="savePastedRecipe()" style="flex:1">☁️ Save to library</button>
           <button class="btn-ghost" onclick="clearPasteTab()">Clear</button>
         </div>
-        <div id="paste-loading" class="state-card hidden"><div class="spinner"></div><p>Structuring recipe…</p></div>
-        <div id="paste-error" class="error-card hidden"></div>
-        <div id="paste-preview" class="import-preview hidden">
-          <p class="preview-eyebrow">✏️ Review &amp; edit before saving</p>
-          <div class="import-fields-grid">
-            <label class="field-label">Recipe name<input class="field-input" id="paste-name" type="text" /></label>
-            <label class="field-label">Cuisine type<input class="field-input" id="paste-cuisine" type="text" /></label>
-            <label class="field-label">Cook time<input class="field-input" id="paste-time" type="text" /></label>
-            <label class="field-label">Servings<input class="field-input" id="paste-servings" type="number" min="1" value="4" /></label>
-          </div>
-          <label class="field-label">Ingredients <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="paste-ingredients" rows="8"></textarea></label>
-          <label class="field-label">Steps <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="paste-steps" rows="10"></textarea></label>
-          <div class="import-actions">
-            <button class="btn-primary" onclick="savePastedRecipe()">☁️ Save to library</button>
-            <button class="btn-ghost" onclick="clearPasteTab()">Cancel</button>
-          </div>
+
+        <div style="border-top:1px solid var(--clr-border);margin-top:20px;padding-top:16px">
+          <p style="font-size:12px;color:var(--clr-muted);margin-bottom:10px">Or let AI structure a block of pasted text for you:</p>
+          <textarea class="field-input field-textarea" id="paste-text" rows="6"
+            placeholder="Paste the full recipe text here and AI will split it into ingredients and steps…"></textarea>
+          <button class="btn-ghost full-width" style="margin-top:8px" onclick="extractFromPastedText()">✨ Structure with AI</button>
+          <div id="paste-loading" class="state-card hidden"><div class="spinner"></div><p>Structuring recipe…</p></div>
+          <div id="paste-error" class="error-card hidden"></div>
         </div>
       </div>
     </section>
