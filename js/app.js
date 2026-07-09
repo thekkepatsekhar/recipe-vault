@@ -768,25 +768,26 @@ async function extractFromPastedText() {
 
   document.getElementById('paste-loading')?.classList.remove('hidden');
   document.getElementById('paste-error')?.classList.add('hidden');
-  document.getElementById('paste-preview')?.classList.add('hidden');
 
   try {
     const prompt = `Structure this recipe text and return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
-
 Recipe text:
 ${text.slice(0, 4000)}`;
 
     const recipe = await importRecipeFromURL(prompt);
 
-    document.getElementById('paste-name')        && (document.getElementById('paste-name').value        = recipe.name     || '');
-    document.getElementById('paste-cuisine')     && (document.getElementById('paste-cuisine').value     = recipe.cuisine  || '');
-    document.getElementById('paste-time')        && (document.getElementById('paste-time').value        = recipe.time     || '');
-    document.getElementById('paste-servings')    && (document.getElementById('paste-servings').value    = recipe.servings || 4);
-    document.getElementById('paste-ingredients') && (document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n'));
-    document.getElementById('paste-steps')       && (document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n'));
-    document.getElementById('paste-preview')?.classList.remove('hidden');
-    showToast('Recipe structured ✓ — review and save');
+    // Populate the direct fields
+    if (recipe.name)        document.getElementById('paste-name').value        = recipe.name;
+    if (recipe.cuisine)     document.getElementById('paste-cuisine').value     = recipe.cuisine;
+    if (recipe.time)        document.getElementById('paste-time').value        = recipe.time;
+    if (recipe.servings)    document.getElementById('paste-servings').value    = recipe.servings;
+    if (recipe.ingredients) document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
+    if (recipe.steps)       document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n');
+
+    // Clear the paste text area
+    document.getElementById('paste-text').value = '';
+    showToast('Recipe structured ✓ — review the fields and save');
   } catch(e) {
     const el = document.getElementById('paste-error');
     if (el) { el.textContent = 'Could not structure recipe: ' + e.message; el.classList.remove('hidden'); }
@@ -829,14 +830,12 @@ async function savePastedRecipe() {
 }
 
 function clearPasteTab() {
-  const el = document.getElementById('paste-text');
-  if (el) el.value = '';
-  document.getElementById('paste-preview')?.classList.add('hidden');
-  document.getElementById('paste-error')?.classList.add('hidden');
-  ['paste-name','paste-cuisine','paste-time','paste-ingredients','paste-steps'].forEach(id => {
+  ['paste-name','paste-cuisine','paste-time','paste-ingredients','paste-steps','paste-text'].forEach(id => {
     const f = document.getElementById(id); if (f) f.value = '';
   });
   const s = document.getElementById('paste-servings'); if (s) s.value = '4';
+  document.getElementById('paste-error')?.classList.add('hidden');
+  document.getElementById('paste-loading')?.classList.add('hidden');
 }
 
 // ── IMPORT (URL) ──────────────────────────────────────────────────────────────
