@@ -312,19 +312,33 @@ async function syncFromDrive() {
       `'${rootFolder.id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
     );
 
-    // Collect all PDF/text files
-    const allFiles = [];
+    // Collect all files — prefer Google Docs over PDFs when both exist
+    const allFilesRaw = [];
     const rootFiles = await listFiles(
       `'${rootFolder.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain' or mimeType='application/vnd.google-apps.document')`
     );
-    rootFiles.forEach(f => allFiles.push({ ...f, cuisine: 'Other' }));
+    rootFiles.forEach(f => allFilesRaw.push({ ...f, cuisine: 'Other' }));
 
     for (const sub of subfolders) {
       const files = await listFiles(
         `'${sub.id}' in parents and trashed=false and (mimeType='application/pdf' or mimeType='text/plain' or mimeType='application/vnd.google-apps.document')`
       );
-      files.forEach(f => allFiles.push({ ...f, cuisine: sub.name }));
+      files.forEach(f => allFilesRaw.push({ ...f, cuisine: sub.name }));
     }
+
+    // De-duplicate: if a Google Doc and PDF share the same base name, keep only the Doc
+    const docNames = new Set(
+      allFilesRaw
+        .filter(f => f.mimeType === 'application/vnd.google-apps.document')
+        .map(f => f.name.toLowerCase().trim())
+    );
+    const allFiles = allFilesRaw.filter(f => {
+      if (f.mimeType === 'application/pdf') {
+        const baseName = f.name.replace(/\.pdf$/i, '').toLowerCase().trim();
+        if (docNames.has(baseName)) return false; // Skip — Google Doc version exists
+      }
+      return true;
+    });
 
     if (allFiles.length === 0) {
       // Show what subfolders were found to help diagnose
@@ -403,14 +417,18 @@ async function syncFromDrive() {
         try {
           const recipe = await fileToRecipe(file);
           if (recipe) {
-            // Mark extraction time even if ingredients is empty
             recipe._attempted = now;
             cached[cacheKey] = recipe;
           }
           return recipe;
         } catch(e) {
-          console.warn('Could not parse', file.name, e);
-          // Cache the failed attempt so we don't retry for 24 hours
+          console.warn('Could not parse', file.name, e.message);
+          // If quota hit — stop all further extraction immediately
+          if (e.message && (e.message.includes('429') || e.message.includes('quota') || e.message.includes('RESOURCE_EXHAUSTED'))) {
+            extractionCount = MAX_EXTRACTIONS_PER_SYNC; // Force stop
+            showToast('AI quota reached — loading rest from cache');
+          }
+          // Cache the failed attempt
           const placeholder = cached[cacheKey] || {
             id: cacheKey, name: file.name.replace(/\.(pdf|txt)$/i, ''),
             cuisine: file.cuisine || 'Other', emoji: guessEmoji(file.cuisine || ''),
