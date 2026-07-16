@@ -140,9 +140,13 @@ function silentTokenRefresh() {
     }
     clearTimeout(timeout);
     cleanup();
-    // Can't refresh silently — show gentle prompt
+    // Can't refresh silently — show gentle prompt on the main screen
     updateSignInUI(false);
     updateCloudBadge();
+    showToast('Session expired — tap Settings to sign in again');
+    // Show a reconnect banner on the recipes screen
+    const banner = document.getElementById('connect-banner');
+    if (banner) banner.classList.remove('hidden');
     showToast('Session expired — tap Settings to sign in again');
   };
 }
@@ -483,50 +487,8 @@ async function extractPDFText(fileId, mimeType) {
     } catch(e) { return ''; }
   }
 
-  // PDFs — try Drive's built-in OCR/text extraction first
-  // This works much better than our manual binary parser for "Print to PDF" files
-  try {
-    // Copy the PDF to a temp Google Doc to extract text via Drive's built-in engine
-    const copyRes = await fetch(
-      'https://www.googleapis.com/drive/v3/files/' + fileId + '/copy',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + drive.accessToken,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          mimeType: 'application/vnd.google-apps.document',
-        }),
-      }
-    );
-    if (copyRes.ok) {
-      const copyData = await copyRes.json();
-      const tempId = copyData.id;
-      // Export the temp doc as plain text
-      try {
-        const text = await gfetchText(
-          'https://www.googleapis.com/drive/v3/files/' + tempId + '/export?mimeType=text/plain'
-        );
-        // Delete the temp file
-        fetch('https://www.googleapis.com/drive/v3/files/' + tempId, {
-          method: 'DELETE',
-          headers: { 'Authorization': 'Bearer ' + drive.accessToken },
-        }).catch(() => {});
-        if (text && text.trim().length > 20) return text;
-      } catch(e) {
-        // Delete temp file even if export failed
-        fetch('https://www.googleapis.com/drive/v3/files/' + tempId, {
-          method: 'DELETE',
-          headers: { 'Authorization': 'Bearer ' + drive.accessToken },
-        }).catch(() => {});
-      }
-    }
-  } catch(e) {
-    console.warn('Drive PDF->Doc conversion failed, falling back to binary parser:', e.message);
-  }
-
-  // Fall back to basic binary text extraction
+  // PDFs — download and extract text from binary
+  // "Print to PDF" files contain embedded text that we can read directly
   try {
     const res = await fetch(
       'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
@@ -534,52 +496,89 @@ async function extractPDFText(fileId, mimeType) {
     );
     if (!res.ok) throw new Error('Download failed: ' + res.status);
     const arrayBuffer = await res.arrayBuffer();
-    return extractTextFromPDFBuffer(arrayBuffer);
+    const text = extractTextFromPDFBuffer(arrayBuffer);
+    if (text && text.trim().length > 30) {
+      console.log('PDF text extracted:', text.length, 'chars for file', fileId);
+      return text;
+    }
+    console.warn('PDF text extraction returned empty for', fileId);
+    return '';
   } catch(e) {
     console.warn('PDF download failed:', e);
     return '';
   }
 }
 
-// Basic PDF text extractor — reads raw text streams from PDF binary
+// Improved PDF text extractor — handles modern "Print to PDF" files better
 function extractTextFromPDFBuffer(buffer) {
   try {
-    const bytes  = new Uint8Array(buffer);
-    const str    = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
-    const texts  = [];
+    const bytes = new Uint8Array(buffer);
+    const str   = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+    const texts = [];
 
-    // Extract text from PDF text streams (BT...ET blocks)
+    // Method 1: Extract text from BT...ET blocks (standard PDF text operator)
     const btMatches = str.matchAll(/BT([\s\S]*?)ET/g);
     for (const match of btMatches) {
       const block = match[1];
-      // Extract strings in parentheses: (Hello World)
+
+      // Strings in parentheses: (Hello World)
       const parenMatches = block.matchAll(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g);
       for (const m of parenMatches) {
         const decoded = m[1]
-          .replace(/\\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\\t/g, ' ')
-          .replace(/\\\\/g, '\\')
-          .replace(/\\([()\d])/g, '$1')
-          .trim();
-        if (decoded.length > 1) texts.push(decoded);
+          .replace(/\\n/g, '\n').replace(/\\r/g, '\n')
+          .replace(/\\t/g, ' ').replace(/\\\\/g, '\\')
+          .replace(/\\([()\d])/g, '$1').trim();
+        if (decoded.length > 0) texts.push(decoded);
       }
-      // Extract hex strings: <48656c6c6f>
-      const hexMatches = block.matchAll(/<([0-9a-fA-F]+)>/g);
+
+      // Hex strings: <48656c6c6f>
+      const hexMatches = block.matchAll(/<([0-9a-fA-F]{4,})>/g);
       for (const m of hexMatches) {
         const hex = m[1];
-        if (hex.length >= 2 && hex.length % 2 === 0) {
+        if (hex.length % 2 === 0) {
           let decoded = '';
           for (let i = 0; i < hex.length; i += 2) {
             const code = parseInt(hex.slice(i, i+2), 16);
             if (code > 31 && code < 127) decoded += String.fromCharCode(code);
+            else if (code === 10 || code === 13) decoded += ' ';
           }
-          if (decoded.trim().length > 1) texts.push(decoded.trim());
+          if (decoded.trim().length > 0) texts.push(decoded.trim());
         }
+      }
+
+      // TJ arrays: [(text) -200 (more text)] TJ
+      const tjMatches = block.matchAll(/\[((?:[^[\]]*|\[[^\]]*\])*)\]\s*TJ/g);
+      for (const m of tjMatches) {
+        const inner = m[1];
+        const parts = inner.matchAll(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g);
+        const words = [];
+        for (const p of parts) {
+          const decoded = p[1].replace(/\\([()\\\n])/g, '$1').trim();
+          if (decoded.length > 0) words.push(decoded);
+        }
+        if (words.length > 0) texts.push(words.join(''));
       }
     }
 
-    const result = texts.join(' ').replace(/\s+/g, ' ').trim();
+    // Method 2: Extract plain text streams (some PDFs use stream...endstream)
+    const streamMatches = str.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g);
+    for (const match of streamMatches) {
+      const content = match[1];
+      // Only process streams that look like text (not binary image data)
+      if (content.includes('BT') || content.includes('Tf') || content.includes('Td')) continue; // already handled above
+      // Look for readable ASCII text sequences
+      const readable = content.replace(/[^\x20-\x7E\n]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (readable.length > 50 && readable.split(' ').length > 5) {
+        texts.push(readable);
+      }
+    }
+
+    const result = texts
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Fix concatenated words
+      .trim();
+
     return result;
   } catch(e) {
     console.warn('PDF text extraction error:', e);
@@ -714,14 +713,15 @@ async function saveRecipeToDrive(recipe) {
 
     const fileName = recipe.name.replace(/[/\\?%*:|"<>]/g, '-') + '.pdf';
 
-    // Generate PDF using jsPDF
-    const pdfBytes = await generateRecipePDF(recipe);
-    if (!pdfBytes) throw new Error('Could not generate PDF');
+    // Save as Google Doc — Google converts HTML to a proper Doc with full text layer
+    // This means it can be read back perfectly, AND viewed as a formatted document in Drive
+    const htmlContent = buildRecipeHTML(recipe);
+    const docFileName = recipe.name.replace(/[/\\?%*:|"<>]/g, '-');
 
-    // Check if file already exists
+    // Check if file already exists (as .gdoc or without extension)
     const existsRes = await fetch(
       'https://www.googleapis.com/drive/v3/files?q=' +
-      encodeURIComponent(`name='${fileName}' and '${cuisineFolder.id}' in parents and trashed=false`) +
+      encodeURIComponent(`name='${docFileName}' and '${cuisineFolder.id}' in parents and trashed=false and mimeType='application/vnd.google-apps.document'`) +
       '&fields=files(id)&pageSize=1',
       { headers: { 'Authorization': 'Bearer ' + drive.accessToken } }
     );
@@ -730,24 +730,30 @@ async function saveRecipeToDrive(recipe) {
 
     let fileData;
     if (existing) {
-      // Update existing PDF
-      const ur = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files/' + existing.id + '?uploadType=media&fields=id,name,webViewLink',
-        { method: 'PATCH', headers: { 'Authorization': 'Bearer ' + drive.accessToken, 'Content-Type': 'application/pdf' }, body: pdfBytes }
-      );
-      if (!ur.ok) { const e=await ur.json().catch(()=>({})); throw new Error('Update failed ' + ur.status + ': ' + (e.error?.message||ur.statusText)); }
-      fileData = { id: existing.id };
-    } else {
-      // Create new PDF — use supportsAllDrives=false to ensure it lands in user's My Drive
+      // Update existing Google Doc with new HTML content
       const form = new FormData();
       form.append('metadata', new Blob([JSON.stringify({
-        name:    fileName,
-        parents: [cuisineFolder.id],
-        mimeType:'application/pdf',
+        name: docFileName,
       })], { type: 'application/json' }));
-      form.append('file', new Blob([pdfBytes], { type: 'application/pdf' }));
+      form.append('file', new Blob([htmlContent], { type: 'text/html' }));
+      const ur = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files/' + existing.id +
+        '?uploadType=multipart&fields=id,name,webViewLink',
+        { method: 'PATCH', headers: { 'Authorization': 'Bearer ' + drive.accessToken }, body: form }
+      );
+      if (!ur.ok) { const e=await ur.json().catch(()=>({})); throw new Error('Update failed ' + ur.status + ': ' + (e.error?.message||ur.statusText)); }
+      fileData = await ur.json();
+    } else {
+      // Create new Google Doc by uploading HTML with convert=true
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify({
+        name:    docFileName,
+        parents: [cuisineFolder.id],
+        mimeType:'application/vnd.google-apps.document',
+      })], { type: 'application/json' }));
+      form.append('file', new Blob([htmlContent], { type: 'text/html' }));
       const fr = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink&supportsAllDrives=false',
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
         { method: 'POST', headers: { 'Authorization': 'Bearer ' + drive.accessToken }, body: form }
       );
       if (!fr.ok) { const e=await fr.json().catch(()=>({})); throw new Error('Upload failed ' + fr.status + ': ' + (e.error?.message||fr.statusText)); }
@@ -883,6 +889,36 @@ async function generateRecipePDF(recipe) {
   }
 }
 
+function buildRecipeHTML(recipe) {
+  const ingredients = (recipe.ingredients || [])
+    .map(i => `<li>${i.amount ? '<strong>' + i.amount + '</strong> ' : ''}${i.item}</li>`)
+    .join('\n');
+  const steps = (recipe.steps || [])
+    .map((s, i) => `<li>${s}</li>`)
+    .join('\n');
+  const nutrition = recipe.nutrition ? `
+    <h2>Nutrition (per serving)</h2>
+    <p>Calories: ${recipe.nutrition.calories}kcal &nbsp;|&nbsp;
+       Protein: ${recipe.nutrition.protein}g &nbsp;|&nbsp;
+       Carbs: ${recipe.nutrition.carbs}g &nbsp;|&nbsp;
+       Fat: ${recipe.nutrition.fat}g</p>` : '';
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>${recipe.name}</title></head>
+<body>
+<h1>${recipe.name}</h1>
+<p><strong>Cuisine:</strong> ${recipe.cuisine} &nbsp;|&nbsp;
+   <strong>Time:</strong> ${recipe.time} &nbsp;|&nbsp;
+   <strong>Servings:</strong> ${recipe.servings}</p>
+<h2>Ingredients</h2>
+<ul>${ingredients}</ul>
+<h2>Steps</h2>
+<ol>${steps}</ol>
+${nutrition}
+</body>
+</html>`;
+}
+
 function buildRecipeText(recipe) {
   const lines = [
     '# ' + recipe.name,
@@ -992,4 +1028,97 @@ function clearRecipeCache() {
 function showSyncBar(visible) {
   const bar = document.getElementById('sync-bar');
   if (bar) bar.classList.toggle('hidden', !visible);
+}
+
+// ── BULK CONVERT PDFs TO GOOGLE DOCS ─────────────────────────────────────────
+// Converts all PDF files in the Recipes folder to Google Docs
+// Google's conversion engine extracts text properly from any PDF
+async function convertAllPDFsToGoogleDocs() {
+  if (!drive.isSignedIn) { showToast('Sign in to Google Drive first'); return; }
+
+  const btn = document.getElementById('btn-convert-pdfs');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Converting…'; }
+
+  try {
+    const RECIPES_FOLDER_ID = '1txHMRLqVaAL4uJjEokPeo17NDdK8XKGj';
+
+    // Get all subfolders (cuisines)
+    const subRes  = await gfetch(
+      'https://www.googleapis.com/drive/v3/files?q=' +
+      encodeURIComponent(`'${RECIPES_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`) +
+      '&fields=files(id,name)&pageSize=100'
+    );
+    const subfolders = [
+      { id: RECIPES_FOLDER_ID, name: 'Recipes' }, // root itself
+      ...(subRes.files || [])
+    ];
+
+    // Collect all PDFs across all folders
+    let allPDFs = [];
+    for (const folder of subfolders) {
+      const res = await gfetch(
+        'https://www.googleapis.com/drive/v3/files?q=' +
+        encodeURIComponent(`'${folder.id}' in parents and mimeType='application/pdf' and trashed=false`) +
+        '&fields=files(id,name,parents)&pageSize=200'
+      );
+      (res.files || []).forEach(f => allPDFs.push({ ...f, folderId: folder.id }));
+    }
+
+    if (allPDFs.length === 0) {
+      showToast('No PDF files found — all already converted!');
+      if (btn) { btn.disabled = false; btn.textContent = '📄 Convert PDFs to Google Docs'; }
+      return;
+    }
+
+    showToast(`Converting ${allPDFs.length} PDFs to Google Docs…`);
+    let converted = 0;
+    let failed    = 0;
+
+    for (const pdf of allPDFs) {
+      try {
+        // Copy PDF as Google Doc — Drive converts it automatically
+        const copyRes = await fetch(
+          'https://www.googleapis.com/drive/v3/files/' + pdf.id + '/copy?fields=id,name',
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + drive.accessToken,
+              'Content-Type':  'application/json',
+            },
+            body: JSON.stringify({
+              name:     pdf.name.replace(/\.pdf$/i, ''), // Remove .pdf extension
+              parents:  [pdf.folderId],
+              mimeType: 'application/vnd.google-apps.document',
+            }),
+          }
+        );
+
+        if (copyRes.ok) {
+          converted++;
+          showToast(`Converted ${converted} of ${allPDFs.length}…`);
+          // Small delay to avoid hitting Drive API rate limits
+          await new Promise(r => setTimeout(r, 300));
+        } else {
+          failed++;
+          console.warn('Failed to convert:', pdf.name);
+        }
+      } catch(e) {
+        failed++;
+        console.warn('Error converting', pdf.name, e.message);
+      }
+    }
+
+    const msg = `Converted ${converted} PDFs to Google Docs${failed > 0 ? ' (' + failed + ' failed)' : ''} ✓`;
+    showToast(msg);
+
+    // Clear cache so next sync re-extracts using the new Google Docs
+    localStorage.removeItem('rv_recipe_cache');
+    showToast('Cache cleared — tap Sync Now to reload with better extraction!');
+
+  } catch(e) {
+    showToast('Conversion failed: ' + e.message);
+    console.error('PDF conversion error:', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📄 Convert PDFs to Google Docs'; }
+  }
 }
