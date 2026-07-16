@@ -352,100 +352,38 @@ async function syncFromDrive() {
       return;
     }
 
-    // Convert files to recipe objects — process in batches of 5
-    const recipes  = [];
-    const BATCH    = 5;
-    const cached   = getCachedRecipes();
+    // Load recipes — use cache if extracted, otherwise placeholder
+    // AI extraction only happens when user taps "Extract with AI" on a specific recipe
+    const recipes = [];
+    const cached  = getCachedRecipes();
 
-    // Only extract recipes with no ingredients AND not recently attempted
-    // This prevents hammering the AI on every sync for recipes that consistently fail
-    const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-    const MAX_EXTRACTIONS_PER_SYNC = 20; // Cap at 20 AI calls per sync to protect quota
-    let extractionCount = 0;
+    for (const file of allFiles) {
+      const cacheKey     = 'drive_' + file.id;
+      const cachedRecipe = cached[cacheKey];
 
-    const needsExtraction = allFiles.filter(f => {
-      const c = cached['drive_' + f.id];
-      // Skip if has ingredients
-      if (c && c.ingredients && c.ingredients.length > 0) return false;
-      // Skip if attempted recently (within 24 hours) — avoids hammering quota
-      if (c && c._attempted && (now - c._attempted) < ONE_DAY) return false;
-      return true;
-    }).length;
-
-    if (needsExtraction > 0) {
-      const limited = Math.min(needsExtraction, MAX_EXTRACTIONS_PER_SYNC);
-      showToast(`Extracting ${limited} recipes with AI${needsExtraction > MAX_EXTRACTIONS_PER_SYNC ? ' ('+MAX_EXTRACTIONS_PER_SYNC+' today, rest tomorrow)' : ''}…`);
+      if (cachedRecipe && cachedRecipe.ingredients && cachedRecipe.ingredients.length > 0) {
+        recipes.push(cachedRecipe);
+      } else {
+        const placeholder = cachedRecipe || {
+          id:          cacheKey,
+          name:        file.name.replace(/\.(pdf|txt)$/i, ''),
+          cuisine:     file.cuisine || 'Other',
+          emoji:       guessEmoji(file.cuisine || ''),
+          time:        '—',
+          servings:    4,
+          cloudPath:   file.webViewLink || '',
+          driveFileId: file.id,
+          mimeType:    file.mimeType,
+          tags:        ['From Drive'],
+          ingredients: [],
+          steps:       ['Tap \u2728 Extract with AI to load this recipe.'],
+          nutrition:   null,
+        };
+        cached[cacheKey] = placeholder;
+        recipes.push(placeholder);
+      }
     }
 
-    for (let i = 0; i < allFiles.length; i += BATCH) {
-      const batch = allFiles.slice(i, i + BATCH);
-      const results = await Promise.all(batch.map(async file => {
-        const cacheKey    = 'drive_' + file.id;
-        const cachedRecipe = cached[cacheKey];
-
-        // Return cached version if it has ingredients
-        if (cachedRecipe && cachedRecipe.ingredients && cachedRecipe.ingredients.length > 0) {
-          return cachedRecipe;
-        }
-
-        // Skip if attempted recently — wait until tomorrow
-        if (cachedRecipe && cachedRecipe._attempted && (now - cachedRecipe._attempted) < ONE_DAY) {
-          return cachedRecipe; // Return placeholder, try again tomorrow
-        }
-
-        // Skip if we've hit today's extraction limit
-        if (extractionCount >= MAX_EXTRACTIONS_PER_SYNC) {
-          // Mark as placeholder so it shows in the list
-          if (!cachedRecipe) {
-            const placeholder = {
-              id: cacheKey, name: file.name.replace(/\.(pdf|txt)$/i, ''),
-              cuisine: file.cuisine || 'Other', emoji: guessEmoji(file.cuisine || ''),
-              time: '—', servings: 4, cloudPath: file.webViewLink || '',
-              driveFileId: file.id, tags: ['From Drive'],
-              ingredients: [], steps: ['Tap "Extract with AI" to load this recipe.'],
-              nutrition: null, _attempted: 0, // 0 means not attempted yet
-            };
-            cached[cacheKey] = placeholder;
-            return placeholder;
-          }
-          return cachedRecipe;
-        }
-
-        // Extract this recipe
-        extractionCount++;
-        try {
-          const recipe = await fileToRecipe(file);
-          if (recipe) {
-            recipe._attempted = now;
-            cached[cacheKey] = recipe;
-          }
-          return recipe;
-        } catch(e) {
-          console.warn('Could not parse', file.name, e.message);
-          // If quota hit — stop all further extraction immediately
-          if (e.message && (e.message.includes('429') || e.message.includes('quota') || e.message.includes('RESOURCE_EXHAUSTED'))) {
-            extractionCount = MAX_EXTRACTIONS_PER_SYNC; // Force stop
-            showToast('AI quota reached — loading rest from cache');
-          }
-          // Cache the failed attempt
-          const placeholder = cached[cacheKey] || {
-            id: cacheKey, name: file.name.replace(/\.(pdf|txt)$/i, ''),
-            cuisine: file.cuisine || 'Other', emoji: guessEmoji(file.cuisine || ''),
-            time: '—', servings: 4, cloudPath: file.webViewLink || '',
-            driveFileId: file.id, tags: ['From Drive'],
-            ingredients: [], steps: ['Tap "Extract with AI" to load this recipe.'],
-            nutrition: null,
-          };
-          placeholder._attempted = now;
-          cached[cacheKey] = placeholder;
-          return placeholder;
-        }
-      }));
-      results.forEach(r => { if (r) recipes.push(r); });
-    }
-
-    // Save cache for next time
     saveCachedRecipes(cached);
 
     state.recipes = recipes.length > 0 ? recipes : DEMO_RECIPES;
