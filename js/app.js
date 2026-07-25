@@ -115,6 +115,14 @@ function buildCuisineChips() {
     btn.onclick=()=>setFilter(btn,c);
     container.appendChild(btn);
   });
+  updateCuisineDatalist();
+}
+
+function updateCuisineDatalist() {
+  const datalist = document.getElementById('cuisine-list');
+  if (!datalist) return;
+  const cuisines = [...new Set(state.recipes.map(r => r.cuisine).filter(Boolean))].sort();
+  datalist.innerHTML = cuisines.map(c => `<option value="${c}">`).join('');
 }
 
 function setFilter(el, filter) {
