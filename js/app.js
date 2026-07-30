@@ -263,6 +263,9 @@ function renderIngredients() {
       `<li class="ingredient-item"><span class="ingredient-amount">${scaleAmount(i.amount||'',ratio)}</span><span>${i.item}</span></li>`
     ).join('');
   }
+  // Always show re-extract button if recipe has a Drive file
+  const reExtractBtn = document.getElementById('btn-reextract');
+  if (reExtractBtn) reExtractBtn.classList.toggle('hidden', !state.currentRecipe.driveFileId);
   const sn=document.getElementById('serving-num');
   if (sn) sn.textContent=state.currentServings;
 }
@@ -428,11 +431,16 @@ function addToPlannerFromDetail() {
 // ── RE-EXTRACT ────────────────────────────────────────────────────────────────
 async function reExtractCurrentRecipe() {
   if (!state.currentRecipe||!state.currentRecipe.driveFileId) return;
-  showToast('Extracting recipe with AI…');
+
+  // Clear existing extracted content first so we always get fresh data
+  state.currentRecipe.ingredients = [];
+  state.currentRecipe.steps       = [];
+  state.currentRecipe.nutrition   = null;
+
+  showToast('Reading recipe from Drive…');
   try {
-    // Pass mimeType so Google Docs are read via export, not binary PDF parser
     const mimeType = state.currentRecipe.mimeType || null;
-    const text = await extractPDFText(state.currentRecipe.driveFileId, mimeType);
+    const text     = await extractPDFText(state.currentRecipe.driveFileId, mimeType);
     const raw  = await callClaude([{
       role: 'user',
       content: `Extract this recipe and return ONLY valid JSON (no markdown):
