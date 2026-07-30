@@ -115,14 +115,6 @@ function buildCuisineChips() {
     btn.onclick=()=>setFilter(btn,c);
     container.appendChild(btn);
   });
-  updateCuisineDatalist();
-}
-
-function updateCuisineDatalist() {
-  const datalist = document.getElementById('cuisine-list');
-  if (!datalist) return;
-  const cuisines = [...new Set(state.recipes.map(r => r.cuisine).filter(Boolean))].sort();
-  datalist.innerHTML = cuisines.map(c => `<option value="${c}">`).join('');
 }
 
 function setFilter(el, filter) {
@@ -438,7 +430,9 @@ async function reExtractCurrentRecipe() {
   if (!state.currentRecipe||!state.currentRecipe.driveFileId) return;
   showToast('Extracting recipe with AI…');
   try {
-    const text = await extractPDFText(state.currentRecipe.driveFileId);
+    // Pass mimeType so Google Docs are read via export, not binary PDF parser
+    const mimeType = state.currentRecipe.mimeType || null;
+    const text = await extractPDFText(state.currentRecipe.driveFileId, mimeType);
     const raw  = await callClaude([{
       role: 'user',
       content: `Extract this recipe and return ONLY valid JSON (no markdown):
