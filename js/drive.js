@@ -425,13 +425,26 @@ async function fileToRecipe(file) {
 }
 
 async function extractPDFText(fileId, mimeType) {
+  // If mimeType not provided, fetch it from Drive
+  if (!mimeType) {
+    try {
+      const meta = await gfetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?fields=mimeType');
+      mimeType = meta.mimeType || '';
+      console.log('Fetched mimeType for', fileId, ':', mimeType);
+    } catch(e) {
+      console.warn('Could not fetch mimeType:', e.message);
+    }
+  }
+
   // Google Docs — export as plain text directly
   if (mimeType === 'application/vnd.google-apps.document') {
     try {
-      return await gfetchText(
+      const text = await gfetchText(
         'https://www.googleapis.com/drive/v3/files/' + fileId + '/export?mimeType=text/plain'
       );
-    } catch(e) { return ''; }
+      console.log('Google Doc text extracted:', text?.length, 'chars');
+      return text || '';
+    } catch(e) { console.warn('GDoc export failed:', e.message); return ''; }
   }
 
   // Plain text files — download directly
@@ -444,7 +457,6 @@ async function extractPDFText(fileId, mimeType) {
   }
 
   // PDFs — download and extract text from binary
-  // "Print to PDF" files contain embedded text that we can read directly
   try {
     const res = await fetch(
       'https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media',
@@ -454,7 +466,7 @@ async function extractPDFText(fileId, mimeType) {
     const arrayBuffer = await res.arrayBuffer();
     const text = extractTextFromPDFBuffer(arrayBuffer);
     if (text && text.trim().length > 30) {
-      console.log('PDF text extracted:', text.length, 'chars for file', fileId);
+      console.log('PDF text extracted:', text.length, 'chars');
       return text;
     }
     console.warn('PDF text extraction returned empty for', fileId);
@@ -718,6 +730,12 @@ async function saveRecipeToDrive(recipe) {
 
     recipe.driveFileId = fileData.id;
     recipe.cloudPath   = fileData.webViewLink || 'https://drive.google.com/file/d/' + fileData.id + '/view';
+    recipe.mimeType    = 'application/vnd.google-apps.document';
+
+    // Update cache immediately so recipe appears on next open without full resync
+    const cache = getCachedRecipes();
+    cache['drive_' + fileData.id] = recipe;
+    saveCachedRecipes(cache);
 
     showToast('"' + recipe.name + '" saved to Drive ✓');
     return true;
