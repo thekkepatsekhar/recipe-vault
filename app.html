@@ -114,6 +114,7 @@
           <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
           <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open PDF in Drive</button>
           <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
+          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()" style="font-size:13px">✨ Re-extract from Drive file</button>
           <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
           <div style="display:flex;gap:8px;margin-top:0">
             <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
@@ -204,7 +205,7 @@
           <p class="preview-eyebrow">✏️ Review &amp; edit before saving</p>
           <div class="import-fields-grid">
             <label class="field-label">Recipe name<input class="field-input" id="imp-name" type="text" /></label>
-            <label class="field-label">Cuisine type<input class="field-input" id="imp-cuisine" type="text" list="cuisine-list" autocomplete="off" /></label>
+            <label class="field-label">Cuisine type<input class="field-input" id="imp-cuisine" type="text" /></label>
             <label class="field-label">Cook time<input class="field-input" id="imp-time" type="text" /></label>
             <label class="field-label">Servings<input class="field-input" id="imp-servings" type="number" min="1" value="4" /></label>
           </div>
@@ -228,7 +229,7 @@
             <input class="field-input" id="paste-name" type="text" placeholder="e.g. Garlic Butter Prawns" />
           </label>
           <label class="field-label">Cuisine type
-            <input class="field-input" id="paste-cuisine" type="text" list="cuisine-list" autocomplete="off" placeholder="e.g. Seafood, Italian…" />
+            <input class="field-input" id="paste-cuisine" type="text" placeholder="e.g. Seafood, Italian…" />
           </label>
           <label class="field-label">Cook time
             <input class="field-input" id="paste-time" type="text" placeholder="e.g. 30 minutes" />
@@ -416,7 +417,7 @@
       <input class="field-input" id="edit-name" type="text" />
     </label>
     <label class="field-label">Cuisine <span class="field-hint">(determines folder in Drive)</span>
-      <input class="field-input" id="edit-cuisine" type="text" list="cuisine-list" autocomplete="off" />
+      <input class="field-input" id="edit-cuisine" type="text" />
     </label>
     <label class="field-label">Cook time
       <input class="field-input" id="edit-time" type="text" />
@@ -481,6 +482,5 @@
 <script src="js/theme.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/app.js"></script>
-<datalist id="cuisine-list"></datalist>
 </body>
 </html>
