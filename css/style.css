@@ -130,21 +130,29 @@ ul,ol{list-style:none}
 .screen.active{display:block;height:100%;overflow-y:auto}
 
 /* ── DETAIL PANEL — hidden (width:0) until recipe opens, then 40% ── */
+/* Desktop: detail panel hidden until open */
 .detail-panel{
   width:0;
   flex-shrink:0;
   background:var(--clr-surface);
-  display:flex;
+  display:none;
   flex-direction:column;
   overflow:hidden;
   transition:width .25s ease;
   border-left:0px solid var(--clr-border);
 }
-.detail-panel.hidden{width:0!important;border-left-width:0}
 .detail-panel.open{
+  display:flex;
   width:40%;
   border-left:1px solid var(--clr-border);
 }
+
+/* ── BOTTOM NAV — mobile only, hidden on desktop ── */
+.bottom-nav{display:none!important}
+
+/* ── SETTINGS — constrain width on desktop ── */
+#screen-settings .settings-group{max-width:680px}
+#screen-settings .page-title{margin-bottom:16px}
 
 /* ── NAV SEARCH ── */
 .tn-search{display:flex;align-items:center;gap:4px}
