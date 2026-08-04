@@ -66,9 +66,8 @@ function navigate(screen) {
   // Update mobile bottom nav active state
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
 
-  // Show cuisine bar only on recipes screen
-  const cuisineBar = document.getElementById('cuisine-bar');
-  if (cuisineBar) cuisineBar.classList.toggle('hidden', screen !== 'recipes');
+  // Show/hide cuisine bar — now handled by dropdown, close it on nav
+  closeCuisineDropdown();
 
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
@@ -113,29 +112,123 @@ function updateCloudBadge() {
 }
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
-function buildCuisineChips() {
-  // Populate both the cuisine bar (top) and the hidden chip container (used by JS)
-  const bar       = document.getElementById('cuisine-bar');
-  const container = document.getElementById('cuisine-chips');
+// ── NAV SEARCH ───────────────────────────────────────────────────────────────
+function toggleNavSearch() {
+  const input = document.getElementById('nav-search-input');
+  const clear = document.getElementById('nav-search-clear');
+  if (!input) return;
+  const isOpen = input.classList.contains('open');
+  if (isOpen) {
+    clearNavSearch();
+  } else {
+    input.classList.remove('hidden');
+    input.classList.add('open');
+    input.focus();
+    // Navigate to recipes if not already there
+    if (!document.getElementById('screen-recipes')?.classList.contains('active')) {
+      navigate('recipes');
+    }
+  }
+}
 
-  // Clear existing cuisine chips from bar (keep "All" chip)
-  if (bar) {
-    [...bar.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+function clearNavSearch() {
+  const input = document.getElementById('nav-search-input');
+  const clear = document.getElementById('nav-search-clear');
+  if (input) { input.value = ''; input.classList.remove('open'); input.classList.add('hidden'); }
+  if (clear) clear.classList.add('hidden');
+  state.currentSearch = '';
+  applyFilters();
+}
+
+// Wire up nav search input
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('nav-search-input');
+  if (!inp) return;
+  inp.addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    state.currentSearch = q;
+    const clear = document.getElementById('nav-search-clear');
+    if (clear) clear.classList.toggle('hidden', !q);
+    // Navigate to recipes when searching
+    if (q && !document.getElementById('screen-recipes')?.classList.contains('active')) {
+      navigate('recipes');
+    }
+    applyFilters();
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Escape') clearNavSearch();
+  });
+});
+
+// ── CUISINE DROPDOWN ──────────────────────────────────────────────────────────
+function handleRecipesClick() {
+  const currentScreen = document.querySelector('.tn-item.active')?.dataset.screen;
+  if (currentScreen !== 'recipes') {
+    navigate('recipes');
+    return;
+  }
+  // Already on recipes — toggle dropdown
+  toggleCuisineDropdown();
+}
+
+function toggleCuisineDropdown() {
+  const menu  = document.getElementById('cuisine-dropdown');
+  const arrow = document.getElementById('tn-recipes-arrow');
+  if (!menu) return;
+  const isOpen = !menu.classList.contains('hidden');
+  if (isOpen) {
+    menu.classList.add('hidden');
+    arrow?.classList.remove('open');
+  } else {
+    menu.classList.remove('hidden');
+    arrow?.classList.add('open');
+  }
+}
+
+function closeCuisineDropdown() {
+  document.getElementById('cuisine-dropdown')?.classList.add('hidden');
+  document.getElementById('tn-recipes-arrow')?.classList.remove('open');
+}
+
+function selectCuisine(el, filter) {
+  // Update active state in dropdown
+  document.querySelectorAll('.tn-drop-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  closeCuisineDropdown();
+  state.currentFilter = filter;
+  applyFilters();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('tn-recipes-wrap');
+  if (wrap && !wrap.contains(e.target)) closeCuisineDropdown();
+});
+
+function buildCuisineChips() {
+  const dropdown  = document.getElementById('cuisine-dropdown');
+  const container = document.getElementById('cuisine-chips'); // hidden, kept for compat
+
+  if (dropdown) {
+    // Keep "All recipes" button, remove old cuisine options
+    [...dropdown.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
     getCuisines().forEach(c => {
       const btn = document.createElement('button');
-      btn.className = 'chip'; btn.dataset.filter = c; btn.textContent = c;
-      btn.onclick = () => setFilter(btn, c);
-      bar.appendChild(btn);
+      btn.className = 'tn-drop-item';
+      btn.dataset.filter = c;
+      btn.textContent = c;
+      btn.onclick = () => selectCuisine(btn, c);
+      dropdown.appendChild(btn);
     });
   }
 
-  // Also keep hidden container in sync for compatibility
+  // Keep hidden container in sync for any legacy references
   if (container) {
     [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
     getCuisines().forEach(c => {
       const btn = document.createElement('button');
       btn.className = 'chip'; btn.dataset.filter = c; btn.textContent = c;
-      btn.onclick = () => setFilter(btn, c);
+      btn.onclick = () => selectCuisine(btn, c);
       container.appendChild(btn);
     });
   }
@@ -269,14 +362,16 @@ function openRecipe(recipe) {
 
   if (state.isDesktop()) {
     panel.classList.remove('hidden');
+    panel.classList.add('open');
     panel.style.cssText = '';
     // Highlight active card in list
     document.querySelectorAll('.recipe-card').forEach(c => {
       c.classList.toggle('active-card', c.dataset.id === recipe.id);
     });
   } else {
-    panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:150;';
     panel.classList.remove('hidden');
+    panel.classList.add('open');
+    panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:150;width:100%!important;';
     panel.querySelector('.detail-body')?.scrollTo(0, 0);
   }
 
@@ -287,11 +382,13 @@ function openRecipe(recipe) {
 }
 
 function closeDetail() {
-  const panel=document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-panel');
   if (!panel) return;
+  panel.classList.remove('open');
   panel.classList.add('hidden');
-  panel.style.cssText='';
-  state.currentRecipe=null;
+  panel.style.cssText = '';
+  state.currentRecipe = null;
+  document.querySelectorAll('.recipe-card').forEach(c => c.classList.remove('active-card'));
 }
 
 function renderIngredients() {
