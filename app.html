@@ -23,37 +23,41 @@
 
 <div id="app" class="app hidden">
 
-  <aside class="sidebar">
-    <div class="sidebar-brand">
-      <span class="sidebar-logo">📖</span>
-      <span class="sidebar-title">Recipe Vault</span>
+  <!-- TOP NAV -->
+  <nav class="top-nav">
+    <div class="top-nav-brand"><span>📖</span></div>
+    <div class="tn-dropdown" id="tn-recipes-wrap">
+      <button class="tn-item active" data-screen="recipes" onclick="handleRecipesClick()">
+        <span class="tn-icon">📚</span><span class="tn-label">Recipes</span><span class="tn-arrow" id="tn-recipes-arrow">▾</span>
+      </button>
+      <div class="tn-dropdown-menu hidden" id="cuisine-dropdown">
+        <button class="tn-drop-item active" data-filter="all" onclick="selectCuisine(this,'all')">📋 All recipes</button>
+      </div>
     </div>
-    <nav class="sidebar-nav">
-      <button class="sn-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="sn-icon">📚</span><span>Recipes</span></button>
-      <button class="sn-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="sn-icon">📅</span><span>Meal Planner</span></button>
-      <button class="sn-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="sn-icon">🛒</span><span>Shopping List</span><span class="sn-badge hidden" id="list-badge">0</span></button>
-      <button class="sn-item"        data-screen="import"   onclick="navigate('import')">  <span class="sn-icon">➕</span><span>Import Recipe</span></button>
-      <button class="sn-item"        data-screen="settings" onclick="navigate('settings')"><span class="sn-icon">⚙️</span><span>Settings</span></button>
-    </nav>
-    <div class="sidebar-cloud" onclick="navigate('settings')">
-      <span id="cloud-icon">☁️</span>
-      <span id="cloud-label">Sign in to connect</span>
+    <button class="tn-item" data-screen="planner"  onclick="navigate('planner')"><span class="tn-icon">📅</span><span class="tn-label">Meal Planner</span></button>
+    <button class="tn-item" data-screen="shopping" onclick="navigate('shopping')"><span class="tn-icon">🛒</span><span class="tn-label">Shopping</span><span class="tn-badge hidden" id="list-badge">0</span></button>
+    <button class="tn-item" data-screen="import"   onclick="navigate('import')"><span class="tn-icon">➕</span><span class="tn-label">Import</span></button>
+    <button class="tn-item" data-screen="settings" onclick="navigate('settings')"><span class="tn-icon">⚙️</span><span class="tn-label">Settings</span></button>
+    <div class="top-nav-right">
+      <div class="tn-search">
+        <button class="tn-search-icon" onclick="toggleNavSearch()">🔍</button>
+        <input type="search" id="nav-search-input" class="tn-search-input hidden" placeholder="Search recipes…" autocomplete="off" />
+        <button class="tn-search-clear hidden" id="nav-search-clear" onclick="clearNavSearch()">✕</button>
+      </div>
+      <span class="top-nav-count" id="recipe-count-label"></span>
+      <div class="top-nav-cloud" onclick="navigate('settings')">
+        <span id="cloud-icon">☁️</span><span id="cloud-label">Sign in</span>
+      </div>
     </div>
-  </aside>
+  </nav>
 
-  <main class="main-content">
+  <!-- APP BODY -->
+  <div class="app-body" id="app-body">
+    <div class="screen-area" id="screen-area">
+  <main class="main-content" style="display:contents">
 
     <!-- RECIPES -->
     <section id="screen-recipes" class="screen active">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">Recipes</h1>
-          <p class="page-sub" id="recipe-count-label">Loading…</p>
-        </div>
-        <div class="page-header-actions">
-          <button class="btn-ghost-sm" onclick="resync()">🔄 Sync</button>
-        </div>
-      </div>
       <div id="connect-banner" class="connect-banner">
         <div>
           <strong>Connect Google Drive to load your real recipes</strong>
@@ -61,13 +65,7 @@
         </div>
         <button class="btn-primary" style="flex-shrink:0;padding:9px 16px;font-size:13px" onclick="navigate('settings')">Open Settings</button>
       </div>
-      <div class="search-filter-bar">
-        <div class="search-box">
-          <span class="search-icon">🔍</span>
-          <input type="search" id="search-input" class="search-input" placeholder="Search by name, ingredient, or cuisine…" autocomplete="off" />
-          <button class="search-clear hidden" id="search-clear" onclick="clearSearch()">✕</button>
-        </div>
-        <div class="chip-row" id="cuisine-chips">
+      <div class="chip-row" id="cuisine-chips">
           <button class="chip chip-active" data-filter="all" onclick="setFilter(this,'all')">All</button>
         </div>
       </div>
@@ -78,7 +76,7 @@
     </section>
 
     <!-- DETAIL PANEL -->
-    <aside class="detail-panel hidden" id="detail-panel">
+    <aside class="detail-panel" id="detail-panel">
       <div class="detail-hero-sm">
         <button class="detail-close" onclick="closeDetail()" aria-label="Close recipe">✕</button>
         <div class="detail-emoji-lg" id="detail-emoji">🍝</div>
@@ -329,34 +327,11 @@
           </div>
           <div class="settings-group">
             <div class="settings-label">AI features</div>
-            <div class="settings-row">
-              <span class="settings-row-label">Anthropic API</span>
-              <span id="anthropic-status" class="settings-row-value" style="color:var(--clr-coral)">Checking…</span>
-            </div>
-            <div class="settings-row">
-              <span class="settings-row-label">YouTube API</span>
-              <span id="youtube-status" class="settings-row-value" style="color:var(--clr-coral)">Checking…</span>
-            </div>
-            <!-- Hidden inputs kept for JS compatibility -->
-            <input type="hidden" id="anthropic-key" />
-            <input type="hidden" id="youtube-key" />
+            <div class="settings-row"><span class="settings-row-label">Anthropic API</span><span id="anthropic-status" style="color:var(--clr-coral)">Checking…</span></div>
+            <div class="settings-row"><span class="settings-row-label">YouTube API</span><span id="youtube-status" style="color:var(--clr-coral)">Checking…</span></div>
+            <input type="hidden" id="anthropic-key" /><input type="hidden" id="youtube-key" />
           </div>
-            <div class="settings-row">
-              <span class="settings-row-label">Read steps aloud</span>
-              <label class="toggle"><input type="checkbox" id="voice-read" checked /><span class="toggle-track"></span></label>
-            </div>
-            <div class="settings-row">
-              <span class="settings-row-label">Listen for "next step"</span>
-              <label class="toggle"><input type="checkbox" id="voice-listen" checked /><span class="toggle-track"></span></label>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- ROW 3: about full width -->
-      <div style="max-width:900px">
-        <div class="settings-group">
+          <div class="settings-group">
           <div class="settings-label">About</div>
           <div class="settings-row"><span class="settings-row-label">Version</span><span class="settings-row-value">1.0</span></div>
           <div class="settings-row"><span class="settings-row-label">Recipes loaded</span><span class="settings-row-value" id="sett-recipe-count">—</span></div>
@@ -368,6 +343,7 @@
 
   </main>
 
+  </div><!-- end app-body -->
   <!-- MOBILE BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="nav-icon">📚</span><span class="nav-label">Recipes</span></button>
@@ -462,6 +438,7 @@
   </div>
 </div>
 
+<script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
 <script src="js/theme.js"></script>
