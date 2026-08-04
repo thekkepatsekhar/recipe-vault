@@ -30,12 +30,27 @@
     <div class="top-nav-brand">
       <span>📖</span>
     </div>
-    <button class="tn-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="tn-icon">📚</span><span class="tn-label">Recipes</span></button>
+    <!-- Recipes with cuisine dropdown -->
+    <div class="tn-dropdown" id="tn-recipes-wrap">
+      <button class="tn-item active" data-screen="recipes" onclick="handleRecipesClick()">
+        <span class="tn-icon">📚</span><span class="tn-label">Recipes</span><span class="tn-arrow" id="tn-recipes-arrow">▾</span>
+      </button>
+      <div class="tn-dropdown-menu hidden" id="cuisine-dropdown">
+        <button class="tn-drop-item active" data-filter="all" onclick="selectCuisine(this,'all')">📋 All recipes</button>
+        <!-- cuisine options injected here -->
+      </div>
+    </div>
     <button class="tn-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="tn-icon">📅</span><span class="tn-label">Planner</span></button>
     <button class="tn-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="tn-icon">🛒</span><span class="tn-label">Shopping</span><span class="tn-badge hidden" id="list-badge">0</span></button>
     <button class="tn-item"        data-screen="import"   onclick="navigate('import')">  <span class="tn-icon">➕</span><span class="tn-label">Import</span></button>
     <button class="tn-item"        data-screen="settings" onclick="navigate('settings')"><span class="tn-icon">⚙️</span><span class="tn-label">Settings</span></button>
     <div class="top-nav-right">
+      <!-- Search — expands inline in nav bar -->
+      <div class="tn-search" id="tn-search">
+        <button class="tn-search-icon" id="tn-search-btn" onclick="toggleNavSearch()" title="Search recipes">🔍</button>
+        <input type="search" id="nav-search-input" class="tn-search-input hidden" placeholder="Search recipes…" autocomplete="off" />
+        <button class="tn-search-clear hidden" id="nav-search-clear" onclick="clearNavSearch()">✕</button>
+      </div>
       <span class="top-nav-count" id="recipe-count-label"></span>
       <div class="top-nav-cloud" onclick="navigate('settings')">
         <span id="cloud-icon">☁️</span>
@@ -44,11 +59,7 @@
     </div>
   </nav>
 
-  <!-- ── CUISINE BAR (shown only on recipes screen) ── -->
-  <div class="cuisine-bar" id="cuisine-bar">
-    <button class="chip chip-active" data-filter="all" id="chip-all" onclick="setFilter(this,'all')">All</button>
-    <!-- cuisine chips injected here by JS -->
-  </div>
+  <!-- No cuisine bar — dropdown on Recipes button instead -->
 
   <!-- ── SYNC BAR ── -->
   <div id="sync-bar" class="sync-bar hidden">
@@ -56,11 +67,11 @@
     <span>Syncing with Google Drive…</span>
   </div>
 
-  <!-- ── APP BODY: list (60%) + detail (40%) ── -->
-  <div class="app-body">
+  <!-- ── APP BODY: full width until recipe opens, then 60/40 ── -->
+  <div class="app-body" id="app-body">
 
-    <!-- SCREEN AREA (60%) -->
-    <div class="screen-area">
+    <!-- SCREEN AREA — full width by default, 60% when detail open -->
+    <div class="screen-area" id="screen-area">
 
       <!-- RECIPES -->
       <section id="screen-recipes" class="screen active">
@@ -71,15 +82,8 @@
           </div>
           <button class="btn-primary" style="flex-shrink:0;font-size:13px;padding:9px 14px" onclick="navigate('settings')">Open Settings</button>
         </div>
-        <div class="search-filter-bar">
-          <div class="search-box">
-            <span class="search-icon">🔍</span>
-            <input type="search" id="search-input" class="search-input" placeholder="Search by name, ingredient, or cuisine…" autocomplete="off" />
-            <button class="search-clear hidden" id="search-clear" onclick="clearSearch()">✕</button>
-          </div>
-        </div>
-        <!-- cuisine chips moved to cuisine-bar above -->
-        <div id="cuisine-chips" style="display:none"></div><!-- hidden but used by JS -->
+        <!-- cuisine chips — hidden, used by JS for datalist -->
+        <div id="cuisine-chips" style="display:none"></div>
 
         <div id="recipes-state-empty"  class="state-card hidden"><div class="state-emoji">🍽️</div><p class="state-title">No recipes yet</p><p class="state-sub">Sign in to Google Drive and make sure you have a Recipes folder with PDF files.</p><button class="btn-primary" onclick="navigate('settings')">Open Settings</button></div>
         <div id="recipes-state-no-results" class="state-card hidden"><div class="state-emoji">🔎</div><p class="state-title">Nothing matched</p><p class="state-sub">Try a different keyword or cuisine.</p><button class="btn-ghost" onclick="clearSearch()">Clear search</button></div>
