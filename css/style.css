@@ -117,28 +117,78 @@ ul,ol{list-style:none}
   min-height:0;
 }
 
-/* ── SCREEN AREA (60%) ── */
+/* ── SCREEN AREA — full width by default, shrinks when detail opens ── */
 .screen-area{
-  width:var(--list-w);
-  flex-shrink:0;
+  flex:1;
+  min-width:0;
   display:flex;
   flex-direction:column;
   overflow:hidden;
-  border-right:1px solid var(--clr-border);
+  transition:flex .25s ease;
 }
 .screen{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:20px 24px 40px;display:none}
 .screen.active{display:block}
 
-/* ── DETAIL PANEL (40%) — fixed header, scrollable body ── */
+/* ── DETAIL PANEL — hidden (width:0) until recipe opens, then 40% ── */
 .detail-panel{
-  width:var(--detail-w);
+  width:0;
   flex-shrink:0;
   background:var(--clr-surface);
   display:flex;
   flex-direction:column;
-  overflow:hidden; /* children handle their own scroll */
+  overflow:hidden;
+  transition:width .25s ease;
+  border-left:0px solid var(--clr-border);
 }
-.detail-panel.hidden{display:none}
+.detail-panel.hidden{width:0!important;border-left-width:0}
+.detail-panel.open{
+  width:40%;
+  border-left:1px solid var(--clr-border);
+}
+
+/* ── NAV SEARCH ── */
+.tn-search{display:flex;align-items:center;gap:4px}
+.tn-search-icon{font-size:17px;padding:5px 8px;border-radius:var(--radius-sm);color:rgba(255,255,255,.55);transition:color .15s,background .15s}
+.tn-search-icon:hover{color:#fff;background:rgba(255,255,255,.1)}
+.tn-search-input{
+  width:0;opacity:0;
+  padding:5px 10px;font-size:13px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:var(--radius-sm);
+  color:#fff;outline:none;
+  transition:width .25s ease,opacity .2s ease;
+}
+.tn-search-input::placeholder{color:rgba(255,255,255,.4)}
+.tn-search-input.open{width:180px;opacity:1}
+.tn-search-clear{font-size:12px;color:rgba(255,255,255,.5);padding:4px 6px;transition:color .15s}
+.tn-search-clear:hover{color:#fff}
+
+/* ── DROPDOWN ── */
+.tn-dropdown{position:relative}
+.tn-arrow{font-size:10px;margin-left:3px;opacity:.7;transition:transform .15s}
+.tn-arrow.open{transform:rotate(180deg)}
+.tn-dropdown-menu{
+  position:absolute;top:calc(100% + 4px);left:0;
+  background:var(--clr-ink);
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:var(--radius-md);
+  min-width:220px;
+  box-shadow:0 8px 32px rgba(0,0,0,.45);
+  z-index:200;
+  overflow:hidden;
+  max-height:70vh;
+  overflow-y:auto;
+}
+.tn-drop-item{
+  display:block;width:100%;text-align:left;
+  padding:10px 16px;font-size:13px;font-weight:500;
+  color:rgba(255,255,255,.6);
+  transition:background .12s,color .12s;
+  white-space:nowrap;
+}
+.tn-drop-item:hover{background:rgba(255,255,255,.1);color:#fff}
+.tn-drop-item.active{background:rgba(232,98,58,.25);color:var(--clr-coral)}
 
 /* Static header — never scrolls */
 .detail-header{
