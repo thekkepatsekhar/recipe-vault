@@ -51,10 +51,12 @@
     </div>
   </nav>
 
+
   <!-- APP BODY -->
   <div class="app-body" id="app-body">
+
+    <!-- SCREEN AREA — all screens live here -->
     <div class="screen-area" id="screen-area">
-    <!-- RECIPES -->
     <section id="screen-recipes" class="screen active">
       <div id="connect-banner" class="connect-banner hidden">
         <div>
@@ -70,77 +72,6 @@
       <div id="sync-bar" class="sync-bar hidden"><div class="spinner-sm"></div> Syncing with Google Drive…</div>
     </section>
 
-
-    </div><!-- end screen-area -->
-    <aside class="detail-panel" id="detail-panel">
-      <div class="detail-header">
-        <button class="detail-close" onclick="closeDetail()">✕</button>
-        <span class="detail-emoji-lg" id="detail-emoji">🍽️</span>
-        <div class="detail-tags" id="detail-tags"></div>
-        <h2 class="detail-name" id="detail-name">—</h2>
-        <div class="detail-meta-row" id="detail-meta-row"></div>
-      </div>
-      <div class="detail-made-it-bar">
-        <button class="detail-made-it-btn" id="btn-made-it" onclick="markAsMade()">✅ Mark as made</button>
-        <span class="detail-made-it-info" id="made-it-info"></span>
-      </div>
-      <div class="detail-body">
-        <div class="detail-section">
-          <div class="detail-section-header">
-            <span class="detail-section-title">Ingredients</span>
-            <div class="serving-control">
-              <button class="serving-btn" onclick="changeServings(-1)">−</button>
-              <span class="serving-count"><span id="serving-num">2</span> servings</span>
-              <button class="serving-btn" onclick="changeServings(1)">+</button>
-            </div>
-          </div>
-          <ul class="ingredient-list" id="ingredient-list"></ul>
-        </div>
-        <div class="detail-section hidden" id="nutrition-section">
-          <div class="detail-section-title">Nutrition <span class="per-serving-label">per serving</span></div>
-          <div class="nutrition-grid" id="nutrition-grid"></div>
-        </div>
-        <div class="detail-section" id="steps-section">
-          <div class="detail-section-title">Method</div>
-          <ol class="steps-list" id="steps-list"></ol>
-        </div>
-        <div class="detail-actions">
-          <button class="btn-primary full-width" onclick="addToShoppingList()">🛒 Add to shopping list</button>
-          <button class="btn-primary full-width" style="background:var(--clr-ink)" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
-          <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
-          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open in Drive</button>
-          <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
-          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()">✨ Re-extract from Drive file</button>
-          <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
-          <div style="display:flex;gap:8px">
-            <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
-            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red);border-color:var(--clr-red);padding:11px 16px">🗑️</button>
-          </div>
-        </div>
-      </div>
-    </aside>
-    <!-- COOK MODE -->
-    <div id="screen-cook" class="cook-overlay hidden">
-      <div class="cook-header">
-        <button class="back-btn-light" onclick="stopCookMode()">✕ Exit</button>
-        <span class="cook-title" id="cook-recipe-name">—</span>
-        <button class="icon-btn-light" id="voice-toggle" onclick="toggleVoice()">🔇 Voice off</button>
-      </div>
-      <div class="cook-body">
-        <div class="cook-progress">
-          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-          <span class="progress-label" id="progress-label">Step 1 of 6</span>
-        </div>
-        <div class="cook-step-card"><p class="cook-step-text" id="cook-step-text">—</p></div>
-        <div class="cook-controls">
-          <button class="cook-nav-btn" id="btn-prev-step" onclick="changeStep(-1)">← Previous</button>
-          <button class="cook-nav-btn cook-nav-next" id="btn-next-step" onclick="changeStep(1)">Next →</button>
-        </div>
-        <div class="cook-voice-hint" id="voice-hint">🎙️ Say "next step", "repeat", or "go back"</div>
-      </div>
-    </div>
-
-    <!-- MEAL PLANNER -->
     <section id="screen-planner" class="screen hidden">
       <div class="page-header">
         <div><h1 class="page-title">Meal Planner</h1><p class="page-sub">Plan your week, then build a shopping list</p></div>
@@ -154,7 +85,6 @@
       <div class="planner-grid" id="day-list"></div>
     </section>
 
-    <!-- SHOPPING LIST -->
     <section id="screen-shopping" class="screen hidden">
       <div class="page-header">
         <div><h1 class="page-title">Shopping List</h1><p class="page-sub" id="shopping-source-row">—</p></div>
@@ -170,7 +100,6 @@
       </div>
     </section>
 
-    <!-- IMPORT -->
     <section id="screen-import" class="screen hidden">
       <div class="page-header">
         <div><h1 class="page-title">Import Recipe</h1><p class="page-sub">Extract from a URL or paste recipe text directly</p></div>
@@ -262,7 +191,6 @@
       </div>
     </section>
 
-    <!-- SETTINGS — all inline styles, no CSS class grid dependencies -->
     <section id="screen-settings" class="screen hidden">
       <div class="page-header">
         <div><h1 class="page-title">Settings</h1></div>
@@ -338,11 +266,68 @@
 
     </section>
 
-  </main>
+    </div><!-- end screen-area -->
+
+    <!-- DETAIL PANEL — 40% width when open -->
+    <aside class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <span class="detail-emoji-lg" id="detail-emoji">🍽️</span>
+        <div class="detail-tags" id="detail-tags"></div>
+        <h2 class="detail-name" id="detail-name">—</h2>
+        <div class="detail-meta-row" id="detail-meta-row"></div>
+      </div>
+      <div class="detail-made-it-bar">
+        <button class="detail-made-it-btn" id="btn-made-it" onclick="markAsMade()">✅ Mark as made</button>
+        <span class="detail-made-it-info" id="made-it-info"></span>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section">
+          <div class="detail-section-header">
+            <span class="detail-section-title">Ingredients</span>
+            <div class="serving-control">
+              <button class="serving-btn" onclick="changeServings(-1)">−</button>
+              <span class="serving-count"><span id="serving-num">2</span> servings</span>
+              <button class="serving-btn" onclick="changeServings(1)">+</button>
+            </div>
+          </div>
+          <ul class="ingredient-list" id="ingredient-list"></ul>
+        </div>
+        <div class="detail-section hidden" id="nutrition-section">
+          <div class="detail-section-title">Nutrition <span class="per-serving-label">per serving</span></div>
+          <div class="nutrition-grid" id="nutrition-grid"></div>
+        </div>
+        <div class="detail-section" id="steps-section">
+          <div class="detail-section-title">Method</div>
+          <ol class="steps-list" id="steps-list"></ol>
+        </div>
+        <div class="detail-actions">
+          <button class="btn-primary full-width" onclick="addToShoppingList()">🛒 Add to shopping list</button>
+          <button class="btn-primary full-width" style="background:var(--clr-ink)" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
+          <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
+          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open in Drive</button>
+          <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
+          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()">✨ Re-extract from Drive file</button>
+          <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
+            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red);border-color:var(--clr-red);padding:11px 16px">🗑️</button>
+          </div>
+        </div>
+      </div>
+    </aside>
 
   </div><!-- end app-body -->
-  <!-- MOBILE BOTTOM NAV -->
-  <nav class="bottom-nav">
+
+    <!-- COOK MODE -->
+    <div id="screen-cook" class="cook-overlay hidden">
+      <div class="cook-header">
+        <button class="back-btn-light" onclick="stopCookMode()">✕ Exit</button>
+        <span class="cook-title" id="cook-recipe-name">—</span>
+        <button class="icon-btn-light" id="voice-toggle" onclick="toggleVoice()">🔇 Voice off</button>
+      </div>
+
+    <nav class="bottom-nav">
     <button class="nav-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="nav-icon">📚</span><span class="nav-label">Recipes</span></button>
     <button class="nav-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="nav-icon">📅</span><span class="nav-label">Planner</span></button>
     <button class="nav-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="nav-icon">🛒</span><span class="nav-label">List</span><span class="nav-badge hidden" id="list-badge-mobile">0</span></button>
@@ -350,7 +335,8 @@
     <button class="nav-item"        data-screen="settings" onclick="navigate('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
   </nav>
 
-</div>
+
+<datalist id="cuisine-list"></datalist>
 
 <!-- MODALS -->
 <!-- EDIT RECIPE MODAL -->
@@ -435,12 +421,13 @@
   </div>
 </div>
 
+<datalist id="cuisine-list"></datalist>
+
 <script src="js/config.js"></script>
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/app.js"></script>
-<datalist id="cuisine-list"></datalist>
 </body>
 </html>
