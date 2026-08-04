@@ -73,7 +73,8 @@ function navigate(screen) {
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
   if (screen === 'import')   { resetImport(); switchImportTab('url'); }
-  if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
+  // Close detail panel when leaving recipes screen
+  if (screen !== 'recipes') closeDetail();
 }
 
 function renderSettings() {
