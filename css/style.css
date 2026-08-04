@@ -126,8 +126,8 @@ ul,ol{list-style:none}
   overflow:hidden;
   transition:flex .25s ease;
 }
-.screen{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:20px 24px 40px;display:none}
-.screen.active{display:block}
+.screen{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:20px 24px 40px;display:none;min-height:0}
+.screen.active{display:block;height:100%;overflow-y:auto}
 
 /* ── DETAIL PANEL — hidden (width:0) until recipe opens, then 40% ── */
 .detail-panel{
