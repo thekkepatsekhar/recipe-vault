@@ -10,8 +10,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <!-- config.js loads API keys automatically — keep this file private -->
-  <script src="js/config.js"></script>
 </head>
 <body>
 
@@ -25,167 +23,264 @@
 
 <div id="app" class="app hidden">
 
-  <!-- ── TOP NAVIGATION BAR ── -->
-  <nav class="top-nav">
-    <div class="top-nav-brand">
-      <span>📖</span>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-logo">📖</span>
+      <span class="sidebar-title">Recipe Vault</span>
     </div>
-    <!-- Recipes with cuisine dropdown -->
-    <div class="tn-dropdown" id="tn-recipes-wrap">
-      <button class="tn-item active" data-screen="recipes" onclick="handleRecipesClick()">
-        <span class="tn-icon">📚</span><span class="tn-label">Recipes</span><span class="tn-arrow" id="tn-recipes-arrow">▾</span>
-      </button>
-      <div class="tn-dropdown-menu hidden" id="cuisine-dropdown">
-        <button class="tn-drop-item active" data-filter="all" onclick="selectCuisine(this,'all')">📋 All recipes</button>
-        <!-- cuisine options injected here -->
-      </div>
+    <nav class="sidebar-nav">
+      <button class="sn-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="sn-icon">📚</span><span>Recipes</span></button>
+      <button class="sn-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="sn-icon">📅</span><span>Meal Planner</span></button>
+      <button class="sn-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="sn-icon">🛒</span><span>Shopping List</span><span class="sn-badge hidden" id="list-badge">0</span></button>
+      <button class="sn-item"        data-screen="import"   onclick="navigate('import')">  <span class="sn-icon">➕</span><span>Import Recipe</span></button>
+      <button class="sn-item"        data-screen="settings" onclick="navigate('settings')"><span class="sn-icon">⚙️</span><span>Settings</span></button>
+    </nav>
+    <div class="sidebar-cloud" onclick="navigate('settings')">
+      <span id="cloud-icon">☁️</span>
+      <span id="cloud-label">Sign in to connect</span>
     </div>
-    <button class="tn-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="tn-icon">📅</span><span class="tn-label">Planner</span></button>
-    <button class="tn-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="tn-icon">🛒</span><span class="tn-label">Shopping</span><span class="tn-badge hidden" id="list-badge">0</span></button>
-    <button class="tn-item"        data-screen="import"   onclick="navigate('import')">  <span class="tn-icon">➕</span><span class="tn-label">Import</span></button>
-    <button class="tn-item"        data-screen="settings" onclick="navigate('settings')"><span class="tn-icon">⚙️</span><span class="tn-label">Settings</span></button>
-    <div class="top-nav-right">
-      <!-- Search — expands inline in nav bar -->
-      <div class="tn-search" id="tn-search">
-        <button class="tn-search-icon" id="tn-search-btn" onclick="toggleNavSearch()" title="Search recipes">🔍</button>
-        <input type="search" id="nav-search-input" class="tn-search-input hidden" placeholder="Search recipes…" autocomplete="off" />
-        <button class="tn-search-clear hidden" id="nav-search-clear" onclick="clearNavSearch()">✕</button>
+  </aside>
+
+  <main class="main-content">
+
+    <!-- RECIPES -->
+    <section id="screen-recipes" class="screen active">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Recipes</h1>
+          <p class="page-sub" id="recipe-count-label">Loading…</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn-ghost-sm" onclick="resync()">🔄 Sync</button>
+        </div>
       </div>
-      <span class="top-nav-count" id="recipe-count-label"></span>
-      <div class="top-nav-cloud" onclick="navigate('settings')">
-        <span id="cloud-icon">☁️</span>
-        <span id="cloud-label">Sign in</span>
+      <div id="connect-banner" class="connect-banner">
+        <div>
+          <strong>Connect Google Drive to load your real recipes</strong>
+          <p>Go to Settings → Sign in with Google to scan your Recipes folder.</p>
+        </div>
+        <button class="btn-primary" style="flex-shrink:0;padding:9px 16px;font-size:13px" onclick="navigate('settings')">Open Settings</button>
       </div>
-    </div>
-  </nav>
+      <div class="search-filter-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="search" id="search-input" class="search-input" placeholder="Search by name, ingredient, or cuisine…" autocomplete="off" />
+          <button class="search-clear hidden" id="search-clear" onclick="clearSearch()">✕</button>
+        </div>
+        <div class="chip-row" id="cuisine-chips">
+          <button class="chip chip-active" data-filter="all" onclick="setFilter(this,'all')">All</button>
+        </div>
+      </div>
+      <div id="recipes-state-empty"    class="state-card hidden"><div class="state-emoji">🍽️</div><p class="state-title">No recipes yet</p><p class="state-sub">Sign in to Google Drive and make sure you have a Recipes folder with PDF files.</p><button class="btn-primary" onclick="navigate('settings')">Open Settings</button></div>
+      <div id="recipes-state-no-results" class="state-card hidden"><div class="state-emoji">🔎</div><p class="state-title">Nothing matched</p><p class="state-sub">Try a different keyword or cuisine.</p><button class="btn-ghost" onclick="clearSearch()">Clear search</button></div>
+      <div id="recipe-grid" class="recipe-grid" role="list"></div>
+      <div id="sync-bar" class="sync-bar hidden"><div class="spinner-sm"></div> Syncing with Google Drive…</div>
+    </section>
 
-  <!-- No cuisine bar — dropdown on Recipes button instead -->
-
-  <!-- ── SYNC BAR ── -->
-  <div id="sync-bar" class="sync-bar hidden">
-    <div class="spinner-sm"></div>
-    <span>Syncing with Google Drive…</span>
-  </div>
-
-  <!-- ── APP BODY: full width until recipe opens, then 60/40 ── -->
-  <div class="app-body" id="app-body">
-
-    <!-- SCREEN AREA — full width by default, 60% when detail open -->
-    <div class="screen-area" id="screen-area">
-
-      <!-- RECIPES -->
-      <section id="screen-recipes" class="screen active">
-        <div id="connect-banner" class="connect-banner hidden">
-          <div>
-            <strong>Connect Google Drive to load your real recipes</strong>
-            <p>Go to Settings → Sign in with Google to scan your Recipes folder.</p>
+    <!-- DETAIL PANEL -->
+    <aside class="detail-panel hidden" id="detail-panel">
+      <div class="detail-hero-sm">
+        <button class="detail-close" onclick="closeDetail()" aria-label="Close recipe">✕</button>
+        <div class="detail-emoji-lg" id="detail-emoji">🍝</div>
+        <div class="detail-tags" id="detail-tags"></div>
+        <h2 class="detail-name" id="detail-name">—</h2>
+        <div class="detail-meta-row" id="detail-meta-row"></div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section">
+          <div class="detail-section-header">
+            <span class="detail-section-title">Ingredients</span>
+            <div class="serving-control">
+              <button class="serving-btn" onclick="changeServings(-1)">−</button>
+              <span class="serving-count"><span id="serving-num">2</span> servings</span>
+              <button class="serving-btn" onclick="changeServings(1)">+</button>
+            </div>
           </div>
-          <button class="btn-primary" style="flex-shrink:0;font-size:13px;padding:9px 14px" onclick="navigate('settings')">Open Settings</button>
+          <ul class="ingredient-list" id="ingredient-list"></ul>
         </div>
-        <!-- cuisine chips — hidden, used by JS for datalist -->
-        <div id="cuisine-chips" style="display:none"></div>
-
-        <div id="recipes-state-empty"  class="state-card hidden"><div class="state-emoji">🍽️</div><p class="state-title">No recipes yet</p><p class="state-sub">Sign in to Google Drive and make sure you have a Recipes folder with PDF files.</p><button class="btn-primary" onclick="navigate('settings')">Open Settings</button></div>
-        <div id="recipes-state-no-results" class="state-card hidden"><div class="state-emoji">🔎</div><p class="state-title">Nothing matched</p><p class="state-sub">Try a different keyword or cuisine.</p><button class="btn-ghost" onclick="clearSearch()">Clear search</button></div>
-        <div class="recipe-grid" id="recipe-grid"></div>
-      </section>
-
-      <!-- PLANNER -->
-      <section id="screen-planner" class="screen hidden">
-        <div class="page-header">
-          <h1 class="page-title">Meal Planner</h1>
-          <p class="page-sub">Plan your week, then build a shopping list</p>
+        <div class="detail-section" id="nutrition-section">
+          <div class="detail-section-title">Nutrition <span class="per-serving-label">per serving</span></div>
+          <div class="nutrition-grid" id="nutrition-grid"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div class="detail-section" id="steps-section">
+          <div class="detail-section-title">Method</div>
+          <ol class="steps-list" id="steps-list"></ol>
+        </div>
+        <div class="detail-actions">
+          <button class="btn-ghost full-width" id="btn-made-it" onclick="markAsMade()" style="color:var(--clr-coral);border-color:var(--clr-coral)">✅ Mark as made</button>
+          <div id="made-it-info" style="text-align:center;font-size:12px;color:var(--clr-muted);margin-top:-4px;margin-bottom:4px"></div>
+          <button class="btn-primary full-width" onclick="addToShoppingList()">🛒 Add to shopping list</button>
+          <button class="btn-primary full-width" style="background:var(--clr-coral);border-color:var(--clr-coral);margin-top:8px" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
+          <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
+          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open PDF in Drive</button>
+          <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
+          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()" style="font-size:13px">✨ Re-extract from Drive file</button>
+          <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
+          <div style="display:flex;gap:8px;margin-top:0">
+            <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
+            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red,#c0392b);border-color:var(--clr-red,#c0392b);padding:12px 16px">🗑️</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- COOK MODE -->
+    <div id="screen-cook" class="cook-overlay hidden">
+      <div class="cook-header">
+        <button class="back-btn-light" onclick="stopCookMode()">✕ Exit</button>
+        <span class="cook-title" id="cook-recipe-name">—</span>
+        <button class="icon-btn-light" id="voice-toggle" onclick="toggleVoice()">🔇 Voice off</button>
+      </div>
+      <div class="cook-body">
+        <div class="cook-progress">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <span class="progress-label" id="progress-label">Step 1 of 6</span>
+        </div>
+        <div class="cook-step-card"><p class="cook-step-text" id="cook-step-text">—</p></div>
+        <div class="cook-controls">
+          <button class="cook-nav-btn" id="btn-prev-step" onclick="changeStep(-1)">← Previous</button>
+          <button class="cook-nav-btn cook-nav-next" id="btn-next-step" onclick="changeStep(1)">Next →</button>
+        </div>
+        <div class="cook-voice-hint" id="voice-hint">🎙️ Say "next step", "repeat", or "go back"</div>
+      </div>
+    </div>
+
+    <!-- MEAL PLANNER -->
+    <section id="screen-planner" class="screen hidden">
+      <div class="page-header">
+        <div><h1 class="page-title">Meal Planner</h1><p class="page-sub">Plan your week, then build a shopping list</p></div>
+        <div class="page-header-actions">
           <button class="btn-ghost-sm" onclick="shiftWeek(-1)">‹ Prev</button>
           <span class="week-label" id="week-label">This week</span>
           <button class="btn-ghost-sm" onclick="shiftWeek(1)">Next ›</button>
-          <button class="btn-primary-sm" style="margin-left:auto" onclick="buildPlannerList()">🛒 Build list</button>
+          <button class="btn-primary-sm" onclick="buildPlannerList()">🛒 Build list</button>
         </div>
-        <div class="planner-grid" id="day-list"></div>
-      </section>
+      </div>
+      <div class="planner-grid" id="day-list"></div>
+    </section>
 
-      <!-- SHOPPING -->
-      <section id="screen-shopping" class="screen hidden">
-        <div class="page-header">
-          <div><h1 class="page-title">Shopping List</h1><p class="page-sub" id="shopping-source-row">—</p></div>
-          <div class="page-header-actions">
-            <button class="btn-ghost-sm" onclick="exportShoppingList()">📤 Export</button>
-            <button class="btn-ghost-sm" onclick="clearChecked()">🗑️ Clear checked</button>
-          </div>
+    <!-- SHOPPING LIST -->
+    <section id="screen-shopping" class="screen hidden">
+      <div class="page-header">
+        <div><h1 class="page-title">Shopping List</h1><p class="page-sub" id="shopping-source-row">—</p></div>
+        <div class="page-header-actions">
+          <button class="btn-ghost-sm" onclick="exportShoppingList()">📤 Export</button>
+          <button class="btn-ghost-sm" onclick="clearChecked()">🗑️ Clear checked</button>
         </div>
-        <div id="shopping-empty" class="state-card hidden"><div class="state-emoji">🛒</div><p class="state-title">Your list is empty</p><p class="state-sub">Open a recipe and tap "Add to shopping list".</p><button class="btn-primary" onclick="navigate('recipes')">Browse recipes</button></div>
-        <div id="shopping-content" class="hidden">
-          <ul class="shopping-list" id="shopping-list"></ul>
-        </div>
-      </section>
+      </div>
+      <div id="shopping-empty" class="state-card hidden"><div class="state-emoji">🛒</div><p class="state-title">Your list is empty</p><p class="state-sub">Open a recipe and tap "Add to shopping list".</p><button class="btn-primary" onclick="navigate('recipes')">Browse recipes</button></div>
+      <div id="shopping-content">
+        <ul class="shopping-list" id="shopping-list"></ul>
+        <button class="btn-primary" style="margin-top:1.5rem" onclick="exportShoppingList()">📤 Export to notes / shopping app</button>
+      </div>
+    </section>
 
-      <!-- IMPORT -->
-      <section id="screen-import" class="screen hidden">
-        <div class="page-header">
-          <div><h1 class="page-title">Import Recipe</h1><p class="page-sub">Extract from a URL or paste recipe text directly</p></div>
-        </div>
-        <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--clr-border-mid);border-radius:var(--radius-md);overflow:hidden;max-width:480px">
-          <button id="tab-url"   onclick="switchImportTab('url')"   style="flex:1;padding:10px;font-size:13px;font-weight:600;background:var(--clr-ink);color:white;border:none;cursor:pointer">🔗 From URL</button>
-          <button id="tab-paste" onclick="switchImportTab('paste')" style="flex:1;padding:10px;font-size:13px;font-weight:500;background:transparent;color:var(--clr-muted);border:none;cursor:pointer">📋 Paste text</button>
-        </div>
+    <!-- IMPORT -->
+    <section id="screen-import" class="screen hidden">
+      <div class="page-header">
+        <div><h1 class="page-title">Import Recipe</h1><p class="page-sub">Extract from a URL or paste recipe text directly</p></div>
+      </div>
 
-        <!-- URL tab -->
-        <div id="import-tab-url" class="import-card">
-          <div class="import-input-row">
-            <input type="url" id="import-url" class="url-input" placeholder="https://www.youtube.com/watch?v=… or any recipe website" />
-            <button class="btn-primary" id="btn-extract" onclick="extractRecipe()">✨ Extract with AI</button>
-          </div>
-          <div id="import-loading" class="state-card hidden"><div class="spinner"></div><p>Extracting recipe with AI…</p></div>
-          <div id="import-error" class="error-card hidden"></div>
-          <div id="import-preview" class="import-preview hidden">
-            <p class="preview-eyebrow">✏️ Review &amp; edit before saving</p>
-            <div class="import-fields-grid">
-              <label class="field-label">Recipe name<input class="field-input" id="imp-name" type="text" /></label>
-              <label class="field-label">Cuisine type<input class="field-input" id="imp-cuisine" type="text" list="cuisine-list" autocomplete="off" /></label>
-              <label class="field-label">Cook time<input class="field-input" id="imp-time" type="text" /></label>
-              <label class="field-label">Servings<input class="field-input" id="imp-servings" type="number" min="1" value="4" /></label>
-            </div>
-            <label class="field-label">Ingredients <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="imp-ingredients" rows="8"></textarea></label>
-            <label class="field-label">Steps <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="imp-steps" rows="10"></textarea></label>
-            <div class="import-actions">
-              <button class="btn-primary" onclick="saveImportedRecipe()">☁️ Save to library</button>
-              <button class="btn-ghost" onclick="resetImport()">Cancel</button>
-            </div>
-          </div>
-        </div>
+      <!-- Tab switcher -->
+      <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--clr-border-mid);border-radius:var(--radius-md);overflow:hidden;max-width:480px">
+        <button id="tab-url" onclick="switchImportTab('url')"
+          style="flex:1;padding:11px;font-size:14px;font-weight:600;background:var(--clr-ink);color:white;border:none;cursor:pointer">
+          🔗 From URL
+        </button>
+        <button id="tab-paste" onclick="switchImportTab('paste')"
+          style="flex:1;padding:11px;font-size:14px;font-weight:500;background:transparent;color:var(--clr-muted);border:none;cursor:pointer">
+          📋 Paste text
+        </button>
+      </div>
 
-        <!-- Paste tab -->
-        <div id="import-tab-paste" class="import-card hidden">
-          <p style="font-size:13px;color:var(--clr-muted);margin-bottom:14px;line-height:1.6">Fill in the recipe details directly — paste ingredients and steps straight from the website. No AI needed.</p>
+      <!-- URL tab -->
+      <div id="import-tab-url" class="import-card">
+        <div class="import-input-row">
+          <input type="url" id="import-url" class="url-input" placeholder="https://www.youtube.com/watch?v=… or any recipe website" />
+          <button class="btn-primary" id="btn-extract" onclick="extractRecipe()">✨ Extract with AI</button>
+        </div>
+        <div id="import-loading" class="state-card hidden"><div class="spinner"></div><p>Extracting recipe with AI…</p></div>
+        <div id="import-error" class="error-card hidden"></div>
+        <div id="import-preview" class="import-preview hidden">
+          <p class="preview-eyebrow">✏️ Review &amp; edit before saving</p>
           <div class="import-fields-grid">
-            <label class="field-label">Recipe name <span style="color:var(--clr-coral)">*</span><input class="field-input" id="paste-name" type="text" placeholder="e.g. Garlic Butter Prawns" /></label>
-            <label class="field-label">Cuisine type<input class="field-input" id="paste-cuisine" type="text" list="cuisine-list" autocomplete="off" placeholder="e.g. Seafood, Italian…" /></label>
-            <label class="field-label">Cook time<input class="field-input" id="paste-time" type="text" placeholder="e.g. 30 minutes" /></label>
-            <label class="field-label">Servings<input class="field-input" id="paste-servings" type="number" min="1" value="4" /></label>
+            <label class="field-label">Recipe name<input class="field-input" id="imp-name" type="text" /></label>
+            <label class="field-label">Cuisine type<input class="field-input" id="imp-cuisine" type="text" list="cuisine-list" autocomplete="off" /></label>
+            <label class="field-label">Cook time<input class="field-input" id="imp-time" type="text" /></label>
+            <label class="field-label">Servings<input class="field-input" id="imp-servings" type="number" min="1" value="4" /></label>
           </div>
-          <label class="field-label" style="margin-top:4px">Ingredients <span class="field-hint">— one per line</span><textarea class="field-input field-textarea" id="paste-ingredients" rows="10" placeholder="2 tbsp butter&#10;4 cloves garlic, minced&#10;500g prawns, peeled&#10;..."></textarea></label>
-          <label class="field-label" style="margin-top:8px">Steps <span class="field-hint">— one per line</span><textarea class="field-input field-textarea" id="paste-steps" rows="12" placeholder="Heat butter in a pan over medium heat&#10;Add garlic and cook for 1 minute&#10;..."></textarea></label>
-          <div style="display:flex;gap:8px;margin-top:14px">
-            <button class="btn-primary" onclick="savePastedRecipe()" style="flex:1">☁️ Save to library</button>
-            <button class="btn-ghost" onclick="clearPasteTab()">Clear</button>
-          </div>
-          <div style="border-top:1px solid var(--clr-border);margin-top:18px;padding-top:14px">
-            <p style="font-size:12px;color:var(--clr-muted);margin-bottom:8px">Or let AI structure a block of pasted text:</p>
-            <textarea class="field-input field-textarea" id="paste-text" rows="6" placeholder="Paste the full recipe text here and AI will split it into ingredients and steps…"></textarea>
-            <button class="btn-ghost full-width" style="margin-top:8px" onclick="extractFromPastedText()">✨ Structure with AI</button>
-            <div id="paste-loading" class="state-card hidden"><div class="spinner"></div><p>Structuring recipe…</p></div>
-            <div id="paste-error" class="error-card hidden"></div>
+          <label class="field-label">Ingredients <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="imp-ingredients" rows="8"></textarea></label>
+          <label class="field-label">Steps <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="imp-steps" rows="10"></textarea></label>
+          <div class="import-actions">
+            <button class="btn-primary" onclick="saveImportedRecipe()">☁️ Save to library</button>
+            <button class="btn-ghost" onclick="resetImport()">Cancel</button>
           </div>
         </div>
-      </section>
+      </div>
 
-      <!-- SETTINGS -->
-      <section id="screen-settings" class="screen hidden">
-        <div class="page-header"><h1 class="page-title">Settings</h1></div>
+      <!-- Paste text tab -->
+      <div id="import-tab-paste" class="import-card hidden">
+        <p style="font-size:13px;color:var(--clr-muted);margin-bottom:16px;line-height:1.6">
+          Fill in the recipe details directly — paste ingredients and steps straight from the website. No AI needed.
+        </p>
 
+        <div class="import-fields-grid">
+          <label class="field-label">Recipe name <span style="color:var(--clr-coral)">*</span>
+            <input class="field-input" id="paste-name" type="text" placeholder="e.g. Garlic Butter Prawns" />
+          </label>
+          <label class="field-label">Cuisine type
+            <input class="field-input" id="paste-cuisine" type="text" list="cuisine-list" autocomplete="off" placeholder="e.g. Seafood, Italian…" />
+          </label>
+          <label class="field-label">Cook time
+            <input class="field-input" id="paste-time" type="text" placeholder="e.g. 30 minutes" />
+          </label>
+          <label class="field-label">Servings
+            <input class="field-input" id="paste-servings" type="number" min="1" value="4" />
+          </label>
+        </div>
+
+        <label class="field-label" style="margin-top:4px">
+          Ingredients <span class="field-hint">— paste directly from the website, one per line</span>
+          <textarea class="field-input field-textarea" id="paste-ingredients" rows="10"
+            placeholder="2 tbsp butter&#10;4 cloves garlic, minced&#10;500g prawns, peeled&#10;..."></textarea>
+        </label>
+
+        <label class="field-label" style="margin-top:8px">
+          Steps <span class="field-hint">— paste directly from the website, one per line</span>
+          <textarea class="field-input field-textarea" id="paste-steps" rows="12"
+            placeholder="Heat butter in a pan over medium heat&#10;Add garlic and cook for 1 minute&#10;Add prawns and cook until pink&#10;..."></textarea>
+        </label>
+
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn-primary" onclick="savePastedRecipe()" style="flex:1">☁️ Save to library</button>
+          <button class="btn-ghost" onclick="clearPasteTab()">Clear</button>
+        </div>
+
+        <div style="border-top:1px solid var(--clr-border);margin-top:20px;padding-top:16px">
+          <p style="font-size:12px;color:var(--clr-muted);margin-bottom:10px">Or let AI structure a block of pasted text for you:</p>
+          <textarea class="field-input field-textarea" id="paste-text" rows="6"
+            placeholder="Paste the full recipe text here and AI will split it into ingredients and steps…"></textarea>
+          <button class="btn-ghost full-width" style="margin-top:8px" onclick="extractFromPastedText()">✨ Structure with AI</button>
+          <div id="paste-loading" class="state-card hidden"><div class="spinner"></div><p>Structuring recipe…</p></div>
+          <div id="paste-error" class="error-card hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS — all inline styles, no CSS class grid dependencies -->
+    <section id="screen-settings" class="screen hidden">
+      <div class="page-header">
+        <div><h1 class="page-title">Settings</h1></div>
+      </div>
+
+      <!-- ROW 1: two columns -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:900px;margin-bottom:20px">
+
+        <!-- Cloud storage -->
         <div class="settings-group">
           <div class="settings-label">Cloud storage</div>
+
+          <!-- Google Drive sign-in -->
           <div style="padding:14px 16px;border-bottom:1px solid var(--clr-border)">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
               <div>
@@ -205,234 +300,173 @@
               </div>
             </div>
           </div>
+
           <div class="settings-row">
             <span class="settings-row-label">Recipe folder name</span>
             <input class="settings-input" id="folder-path" type="text" value="Recipes" />
           </div>
-          <div style="padding:10px 16px;display:flex;gap:8px;flex-wrap:wrap">
+          <div style="padding:10px 16px;display:flex;gap:8px">
             <button class="btn-ghost full-width" onclick="resync()">🔄 Sync now</button>
             <button class="btn-ghost full-width" onclick="clearAllCacheAndResync()">🗑️ Clear cache</button>
-          </div>
-          <div style="padding:10px 16px;border-top:1px solid var(--clr-border)">
+            <div style="padding:10px 16px;border-top:1px solid var(--clr-border)">
             <div style="font-size:12px;color:var(--clr-muted);margin-bottom:8px;line-height:1.5">Convert all your PDF recipes to Google Docs for better text extraction — one time only</div>
             <button id="btn-convert-pdfs" class="btn-ghost full-width" onclick="convertAllPDFsToGoogleDocs()" style="color:var(--clr-coral);border-color:var(--clr-coral)">📄 Convert PDFs to Google Docs</button>
           </div>
         </div>
 
-        <div class="settings-group">
-          <div class="settings-label">Shopping list export</div>
-          <div class="settings-row">
-            <span class="settings-row-label">Export method</span>
-            <select class="settings-select" id="export-target">
-              <option value="share">Export to Share sheet — send to any app (Android)</option>
-              <option value="keep">Copy list, then open Keep</option>
-              <option value="copy">Copy to clipboard only</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <div class="settings-label">AI features (recipe import &amp; extraction)</div>
-          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding-top:14px;padding-bottom:14px">
-            <span class="settings-row-label">Anthropic API key</span>
-            <div style="font-size:12px;color:var(--clr-muted);line-height:1.5">Get a key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--clr-coral)">console.anthropic.com</a></div>
-            <div style="display:flex;gap:8px;width:100%">
-              <input class="settings-input" id="anthropic-key" type="password" placeholder="sk-ant-..." style="flex:1;width:auto;text-align:left" />
-              <button type="button" onclick="toggleKeyVisibility('anthropic-key')" style="padding:8px;font-size:16px;background:var(--clr-paper-mid);border:1px solid var(--clr-border-mid);border-radius:var(--radius-sm);cursor:pointer;flex-shrink:0">👁️</button>
-              <button class="btn-primary" style="padding:8px 14px;font-size:13px;flex-shrink:0" onclick="saveAnthropicKey()">Save</button>
+        <!-- Voice + Export -->
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="settings-group">
+            <div class="settings-label">Shopping list export</div>
+            <div class="settings-row">
+              <span class="settings-row-label">Export to</span>
+              <select class="settings-select" id="export-target">
+                <option value="share">Share sheet — send to any app (Android)</option>
+                <option value="keep">Copy list, then open Keep</option>
+                <option value="copy">Copy to clipboard only</option>
+              </select>
             </div>
           </div>
-          <div style="border-top:1px solid var(--clr-border)"></div>
-          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;padding-top:14px;padding-bottom:14px">
-            <span class="settings-row-label">YouTube Data API key</span>
-            <div style="font-size:12px;color:var(--clr-muted);line-height:1.5">Enables importing recipes from YouTube. Get at <a href="https://console.cloud.google.com" target="_blank" style="color:var(--clr-coral)">Google Cloud Console</a> → YouTube Data API v3.</div>
-            <div style="display:flex;gap:8px;width:100%">
-              <input class="settings-input" id="youtube-key" type="password" placeholder="AIza..." style="flex:1;width:auto;text-align:left" />
-              <button type="button" onclick="toggleKeyVisibility('youtube-key')" style="padding:8px;font-size:16px;background:var(--clr-paper-mid);border:1px solid var(--clr-border-mid);border-radius:var(--radius-sm);cursor:pointer;flex-shrink:0">👁️</button>
-              <button class="btn-primary" style="padding:8px 14px;font-size:13px;flex-shrink:0" onclick="saveYouTubeKey()">Save</button>
+          <div class="settings-group">
+            <div class="settings-label">AI features</div>
+            <div class="settings-row">
+              <span class="settings-row-label">Anthropic API</span>
+              <span id="anthropic-status" class="settings-row-value" style="color:var(--clr-coral)">Checking…</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">YouTube API</span>
+              <span id="youtube-status" class="settings-row-value" style="color:var(--clr-coral)">Checking…</span>
+            </div>
+            <!-- Hidden inputs kept for JS compatibility -->
+            <input type="hidden" id="anthropic-key" />
+            <input type="hidden" id="youtube-key" />
+          </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Read steps aloud</span>
+              <label class="toggle"><input type="checkbox" id="voice-read" checked /><span class="toggle-track"></span></label>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Listen for "next step"</span>
+              <label class="toggle"><input type="checkbox" id="voice-listen" checked /><span class="toggle-track"></span></label>
             </div>
           </div>
         </div>
 
-        <div class="settings-group">
-          <div class="settings-label">Voice (cook mode)</div>
-          <div class="settings-row">
-            <span class="settings-row-label">Read steps aloud</span>
-            <label class="toggle"><input type="checkbox" id="voice-read" /><span class="toggle-track"></span></label>
-          </div>
-          <div class="settings-row">
-            <span class="settings-row-label">Listen for "next step"</span>
-            <label class="toggle"><input type="checkbox" id="voice-listen" /><span class="toggle-track"></span></label>
-          </div>
-        </div>
+      </div>
 
+      <!-- ROW 3: about full width -->
+      <div style="max-width:900px">
         <div class="settings-group">
           <div class="settings-label">About</div>
           <div class="settings-row"><span class="settings-row-label">Version</span><span class="settings-row-value">1.0</span></div>
           <div class="settings-row"><span class="settings-row-label">Recipes loaded</span><span class="settings-row-value" id="sett-recipe-count">—</span></div>
           <div class="settings-row"><span class="settings-row-label">Planned meals</span><span class="settings-row-value" id="sett-meal-count">—</span></div>
         </div>
-      </section>
-
-    </div><!-- end screen-area -->
-
-    <!-- DETAIL PANEL (40%) -->
-    <aside class="detail-panel hidden" id="detail-panel">
-
-      <!-- STATIC HEADER — never scrolls -->
-      <div class="detail-header">
-        <button class="detail-close" onclick="closeDetail()">✕</button>
-        <span class="detail-emoji-lg" id="detail-emoji">🍽️</span>
-        <div class="detail-tags" id="detail-tags"></div>
-        <h2 class="detail-name" id="detail-name">—</h2>
-        <div class="detail-meta-row" id="detail-meta-row"></div>
       </div>
 
-      <!-- MADE IT — also static -->
-      <div class="detail-made-it-bar">
-        <button class="detail-made-it-btn" id="btn-made-it" onclick="markAsMade()">✅ Mark as made</button>
-        <span class="detail-made-it-info" id="made-it-info"></span>
-      </div>
+    </section>
 
-      <!-- SCROLLABLE BODY -->
-      <div class="detail-body">
-        <div class="detail-section">
-          <div class="detail-section-header">
-            <span class="detail-section-title">Ingredients</span>
-            <div class="serving-control">
-              <button class="serving-btn" onclick="changeServings(-1)">−</button>
-              <span class="serving-count"><span id="serving-num">2</span> servings</span>
-              <button class="serving-btn" onclick="changeServings(1)">+</button>
-            </div>
-          </div>
-          <ul class="ingredient-list" id="ingredient-list"></ul>
-        </div>
-        <div class="detail-section hidden" id="nutrition-section">
-          <div class="detail-section-title">Nutrition <span class="per-serving-label">per serving</span></div>
-          <div class="nutrition-grid" id="nutrition-grid"></div>
-        </div>
-        <div class="detail-section" id="steps-section">
-          <div class="detail-section-title">Method</div>
-          <ol class="steps-list" id="steps-list"></ol>
-        </div>
-        <div class="detail-actions">
-          <button class="btn-primary full-width" onclick="addToShoppingList()">🛒 Add to shopping list</button>
-          <button class="btn-primary full-width" style="background:var(--clr-ink)" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
-          <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
-          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open in Drive</button>
-          <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
-          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()" style="font-size:13px">✨ Re-extract from Drive file</button>
-          <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
-          <div style="display:flex;gap:8px">
-            <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
-            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red);border-color:var(--clr-red);padding:11px 16px">🗑️</button>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-  </div><!-- end app-body -->
-
-  <!-- COOK MODE -->
-  <div id="screen-cook" class="cook-overlay hidden">
-    <div class="cook-header">
-      <button class="back-btn-light" onclick="stopCookMode()">✕ Exit</button>
-      <span class="cook-title" id="cook-recipe-name">—</span>
-      <button class="icon-btn-light" id="voice-toggle" onclick="toggleVoice()">🔇 Voice off</button>
-    </div>
-    <div class="cook-body">
-      <div class="cook-progress">
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
-        <span class="progress-label" id="progress-label">Step 1 of 6</span>
-      </div>
-      <div class="cook-step-card"><p class="cook-step-text" id="cook-step-text">—</p></div>
-      <div class="cook-controls">
-        <button class="cook-nav-btn" id="btn-prev-step" onclick="changeStep(-1)">← Previous</button>
-        <button class="cook-nav-btn cook-nav-next" id="btn-next-step" onclick="changeStep(1)">Next →</button>
-      </div>
-      <div class="cook-voice-hint" id="voice-hint">🎙️ Say "next step", "repeat", or "go back"</div>
-    </div>
-  </div>
+  </main>
 
   <!-- MOBILE BOTTOM NAV -->
-  <nav class="bottom-nav" style="display:none">
+  <nav class="bottom-nav">
     <button class="nav-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="nav-icon">📚</span><span class="nav-label">Recipes</span></button>
     <button class="nav-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="nav-icon">📅</span><span class="nav-label">Planner</span></button>
-    <button class="nav-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="nav-icon">🛒</span><span class="nav-label">Shopping</span><span class="nav-badge hidden" id="list-badge-mobile">0</span></button>
+    <button class="nav-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="nav-icon">🛒</span><span class="nav-label">List</span><span class="nav-badge hidden" id="list-badge-mobile">0</span></button>
     <button class="nav-item"        data-screen="import"   onclick="navigate('import')">  <span class="nav-icon">➕</span><span class="nav-label">Import</span></button>
     <button class="nav-item"        data-screen="settings" onclick="navigate('settings')"><span class="nav-icon">⚙️</span><span class="nav-label">Settings</span></button>
   </nav>
 
-  <!-- MODALS -->
-  <div id="add-to-day-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h3 class="modal-title">Add to meal plan</h3>
-      <p class="modal-sub">Which day for <strong id="modal-recipe-name">—</strong>?</p>
-      <div class="day-picker" id="day-picker"></div>
-      <button class="btn-ghost full-width" style="margin-top:12px" onclick="closeModal('add-to-day-modal')">Cancel</button>
-    </div>
-  </div>
+</div>
 
-  <div id="planner-list-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h3 class="modal-title">Build shopping list</h3>
-      <p class="modal-sub">One combined list for the whole week, or separate per day?</p>
-      <button class="btn-primary full-width" onclick="generatePlannerList('combined')">One combined list</button>
-      <button class="btn-ghost full-width" style="margin-top:8px" onclick="generatePlannerList('daily')">Separate per day</button>
-      <button class="btn-ghost full-width" style="margin-top:8px" onclick="closeModal('planner-list-modal')">Cancel</button>
-    </div>
-  </div>
+<!-- MODALS -->
+<!-- EDIT RECIPE MODAL -->
+<div id="edit-recipe-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:520px;max-height:85vh;overflow-y:auto">
+    <h3 class="modal-title">✏️ Edit recipe</h3>
 
-  <div id="delete-recipe-modal" class="modal-overlay hidden">
-    <div class="modal-card">
-      <h3 class="modal-title">🗑️ Delete recipe</h3>
-      <p class="modal-sub">Are you sure you want to delete <strong id="delete-recipe-name">—</strong>?</p>
-      <label style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--clr-ink);margin-bottom:18px;cursor:pointer">
-        <input type="checkbox" id="delete-from-drive" style="margin-top:2px;flex-shrink:0" />
-        <span id="delete-drive-option">Also delete the file from Google Drive<br><small style="color:var(--clr-muted)">If unchecked, the recipe stays in Drive but is removed from this app.</small></span>
-      </label>
-      <button class="btn-primary full-width" style="background:var(--clr-red)" onclick="executeDeleteRecipe()">Delete</button>
-      <button class="btn-ghost full-width" style="margin-top:8px" onclick="closeModal('delete-recipe-modal')">Cancel</button>
-    </div>
-  </div>
-
-  <!-- EDIT RECIPE MODAL -->
-  <div id="edit-recipe-modal" class="modal-overlay hidden">
-    <div class="modal-card" style="max-width:520px;max-height:85vh;overflow-y:auto">
-      <h3 class="modal-title">✏️ Edit recipe</h3>
-      <div class="field-label" style="margin-bottom:14px">
-        Thumbnail
-        <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
-          <div id="edit-thumb-preview" style="width:64px;height:64px;border-radius:12px;background:var(--clr-coral-lt);display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;overflow:hidden;cursor:pointer;border:2px dashed var(--clr-border-mid)" onclick="document.getElementById('edit-thumb-upload').click()" title="Click to upload a photo">🍽️</div>
-          <div style="flex:1">
-            <div style="font-size:12px;color:var(--clr-muted);margin-bottom:8px">Pick an emoji or upload a photo</div>
-            <input type="file" id="edit-thumb-upload" accept="image/*" style="display:none" onchange="handleThumbUpload(event)" />
-            <div id="emoji-picker" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-          </div>
+    <!-- Thumbnail editor -->
+    <div class="field-label" style="margin-bottom:14px">
+      Thumbnail
+      <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+        <div id="edit-thumb-preview" style="width:64px;height:64px;border-radius:12px;background:var(--clr-coral-lt);display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;overflow:hidden;cursor:pointer;border:2px dashed var(--clr-border-mid)" onclick="document.getElementById('edit-thumb-upload').click()" title="Click to upload a photo">🍽️</div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--clr-muted);margin-bottom:8px">Pick an emoji or upload a photo</div>
+          <input type="file" id="edit-thumb-upload" accept="image/*" style="display:none" onchange="handleThumbUpload(event)" />
+          <div id="emoji-picker" style="display:flex;flex-wrap:wrap;gap:6px"></div>
         </div>
       </div>
-      <label class="field-label">Recipe name<input class="field-input" id="edit-name" type="text" /></label>
-      <label class="field-label">Cuisine <span class="field-hint">(determines folder in Drive)</span><input class="field-input" id="edit-cuisine" type="text" list="cuisine-list" autocomplete="off" /></label>
-      <label class="field-label">Cook time<input class="field-input" id="edit-time" type="text" /></label>
-      <label class="field-label">Servings<input class="field-input" id="edit-servings" type="number" min="1" /></label>
-      <label class="field-label">Tags <span class="field-hint">(comma separated)</span><input class="field-input" id="edit-tags" type="text" /></label>
-      <label class="field-label">Ingredients <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="edit-ingredients" rows="8"></textarea></label>
-      <label class="field-label">Steps <span class="field-hint">(one per line)</span><textarea class="field-input field-textarea" id="edit-steps" rows="8"></textarea></label>
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn-primary" style="flex:1" onclick="saveEditedRecipe()">💾 Save changes</button>
-        <button class="btn-ghost" style="flex:1" onclick="closeModal('edit-recipe-modal')">Cancel</button>
-      </div>
+    </div>
+
+    <label class="field-label">Recipe name
+      <input class="field-input" id="edit-name" type="text" />
+    </label>
+    <label class="field-label">Cuisine <span class="field-hint">(determines folder in Drive)</span>
+      <input class="field-input" id="edit-cuisine" type="text" list="cuisine-list" autocomplete="off" />
+    </label>
+    <label class="field-label">Cook time
+      <input class="field-input" id="edit-time" type="text" />
+    </label>
+    <label class="field-label">Servings
+      <input class="field-input" id="edit-servings" type="number" min="1" />
+    </label>
+    <label class="field-label">Tags <span class="field-hint">(comma separated, e.g. Quick, Vegetarian)</span>
+      <input class="field-input" id="edit-tags" type="text" />
+    </label>
+    <label class="field-label">Ingredients <span class="field-hint">(one per line)</span>
+      <textarea class="field-input field-textarea" id="edit-ingredients" rows="8"></textarea>
+    </label>
+    <label class="field-label">Steps <span class="field-hint">(one per line)</span>
+      <textarea class="field-input field-textarea" id="edit-steps" rows="8"></textarea>
+    </label>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-primary" style="flex:1" onclick="saveEditedRecipe()">💾 Save changes</button>
+      <button class="btn-ghost" style="flex:1" onclick="closeModal('edit-recipe-modal')">Cancel</button>
     </div>
   </div>
+</div>
 
-</div><!-- end app -->
+<!-- DELETE CONFIRM MODAL -->
+<div id="delete-recipe-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h3 class="modal-title">🗑️ Delete recipe</h3>
+    <p class="modal-sub">Are you sure you want to delete <strong id="delete-recipe-name">—</strong>?</p>
+    <div id="delete-drive-option" style="background:var(--clr-paper-mid);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;font-size:14px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="checkbox" id="delete-from-drive" style="width:18px;height:18px" />
+        <span>Also delete the file from Google Drive</span>
+      </label>
+      <p style="font-size:12px;color:var(--clr-muted);margin-top:6px;margin-left:28px">If unchecked, the recipe stays in Drive but is removed from this app.</p>
+    </div>
+    <button class="btn-primary full-width" style="background:var(--clr-red,#c0392b);border-color:var(--clr-red,#c0392b)" onclick="executeDeleteRecipe()">Delete</button>
+    <button class="btn-ghost full-width" style="margin-top:8px" onclick="closeModal('delete-recipe-modal')">Cancel</button>
+  </div>
+</div>
 
-<datalist id="cuisine-list"></datalist>
+<div id="planner-list-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3 class="modal-title">Build shopping list</h3>
+    <p class="modal-sub">One combined list for the whole week, or separate per day?</p>
+    <button class="btn-primary full-width" onclick="generatePlannerList('combined')">One combined list</button>
+    <button class="btn-ghost full-width" style="margin-top:8px" onclick="generatePlannerList('daily')">Separate per day</button>
+    <button class="btn-ghost full-width" style="margin-top:8px;color:var(--clr-muted)" onclick="closeModal('planner-list-modal')">Cancel</button>
+  </div>
+</div>
+
+<div id="add-to-day-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <h3 class="modal-title">Add to meal plan</h3>
+    <p class="modal-sub">Which day for <strong id="modal-recipe-name">—</strong>?</p>
+    <div id="day-picker" class="day-picker"></div>
+    <button class="btn-ghost full-width" style="margin-top:12px" onclick="closeModal('add-to-day-modal')">Cancel</button>
+  </div>
+</div>
 
 <script src="js/data.js"></script>
 <script src="js/api.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/drive.js"></script>
 <script src="js/app.js"></script>
+<datalist id="cuisine-list"></datalist>
 </body>
 </html>
