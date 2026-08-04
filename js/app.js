@@ -85,21 +85,20 @@ function renderSettings() {
   const mc = document.getElementById('sett-meal-count');
   if (rc) rc.textContent = state.recipes.length + ' recipes';
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
-  const keyField = document.getElementById('anthropic-key');
-  if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
-  const gemField = document.getElementById('gemini-key');
-  if (gemField) {
-    gemField.value = localStorage.getItem('rv_gemini_key') || '';
-    const gemStatus = document.getElementById('gemini-key-status');
-    if (gemStatus) {
-      gemStatus.textContent = gemField.value ? '✓ Gemini key active — free AI enabled' : '';
-      gemStatus.style.color = 'var(--clr-coral)';
-    }
+
+  // Show API key status indicators (keys are loaded from config.js)
+  const anthropicStatus = document.getElementById('anthropic-status');
+  const youtubeStatus   = document.getElementById('youtube-status');
+  if (anthropicStatus) {
+    const key = localStorage.getItem('rv_anthropic_key') || '';
+    anthropicStatus.textContent  = key ? '✓ Connected' : '✗ Not configured';
+    anthropicStatus.style.color  = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
   }
-  const gemModel = document.getElementById('gemini-model');
-  if (gemModel) gemModel.value = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
-  const ytField = document.getElementById('youtube-key');
-  if (ytField) ytField.value = localStorage.getItem('rv_youtube_key') || '';
+  if (youtubeStatus) {
+    const key = localStorage.getItem('rv_youtube_key') || '';
+    youtubeStatus.textContent = key ? '✓ Connected' : '✗ Not configured';
+    youtubeStatus.style.color = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
+  }
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -364,7 +363,7 @@ function openRecipe(recipe) {
     panel.classList.remove('hidden');
     panel.classList.add('open');
     panel.style.cssText = '';
-    // Highlight active card in list
+    document.getElementById('app-body')?.classList.add('split');
     document.querySelectorAll('.recipe-card').forEach(c => {
       c.classList.toggle('active-card', c.dataset.id === recipe.id);
     });
@@ -387,6 +386,7 @@ function closeDetail() {
   panel.classList.remove('open');
   panel.classList.add('hidden');
   panel.style.cssText = '';
+  document.getElementById('app-body')?.classList.remove('split');
   state.currentRecipe = null;
   document.querySelectorAll('.recipe-card').forEach(c => c.classList.remove('active-card'));
 }
