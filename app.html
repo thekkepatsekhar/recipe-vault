@@ -54,35 +54,35 @@
   <!-- APP BODY -->
   <div class="app-body" id="app-body">
     <div class="screen-area" id="screen-area">
-  <main class="main-content" style="display:contents">
-
     <!-- RECIPES -->
     <section id="screen-recipes" class="screen active">
-      <div id="connect-banner" class="connect-banner">
+      <div id="connect-banner" class="connect-banner hidden">
         <div>
           <strong>Connect Google Drive to load your real recipes</strong>
           <p>Go to Settings → Sign in with Google to scan your Recipes folder.</p>
         </div>
         <button class="btn-primary" style="flex-shrink:0;padding:9px 16px;font-size:13px" onclick="navigate('settings')">Open Settings</button>
       </div>
-      <div class="chip-row" id="cuisine-chips">
-          <button class="chip chip-active" data-filter="all" onclick="setFilter(this,'all')">All</button>
-        </div>
-      </div>
+      <div id="cuisine-chips" style="display:none"></div>
       <div id="recipes-state-empty"    class="state-card hidden"><div class="state-emoji">🍽️</div><p class="state-title">No recipes yet</p><p class="state-sub">Sign in to Google Drive and make sure you have a Recipes folder with PDF files.</p><button class="btn-primary" onclick="navigate('settings')">Open Settings</button></div>
       <div id="recipes-state-no-results" class="state-card hidden"><div class="state-emoji">🔎</div><p class="state-title">Nothing matched</p><p class="state-sub">Try a different keyword or cuisine.</p><button class="btn-ghost" onclick="clearSearch()">Clear search</button></div>
       <div id="recipe-grid" class="recipe-grid" role="list"></div>
       <div id="sync-bar" class="sync-bar hidden"><div class="spinner-sm"></div> Syncing with Google Drive…</div>
     </section>
 
-    <!-- DETAIL PANEL -->
+
+    </div><!-- end screen-area -->
     <aside class="detail-panel" id="detail-panel">
-      <div class="detail-hero-sm">
-        <button class="detail-close" onclick="closeDetail()" aria-label="Close recipe">✕</button>
-        <div class="detail-emoji-lg" id="detail-emoji">🍝</div>
+      <div class="detail-header">
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <span class="detail-emoji-lg" id="detail-emoji">🍽️</span>
         <div class="detail-tags" id="detail-tags"></div>
         <h2 class="detail-name" id="detail-name">—</h2>
         <div class="detail-meta-row" id="detail-meta-row"></div>
+      </div>
+      <div class="detail-made-it-bar">
+        <button class="detail-made-it-btn" id="btn-made-it" onclick="markAsMade()">✅ Mark as made</button>
+        <span class="detail-made-it-info" id="made-it-info"></span>
       </div>
       <div class="detail-body">
         <div class="detail-section">
@@ -96,7 +96,7 @@
           </div>
           <ul class="ingredient-list" id="ingredient-list"></ul>
         </div>
-        <div class="detail-section" id="nutrition-section">
+        <div class="detail-section hidden" id="nutrition-section">
           <div class="detail-section-title">Nutrition <span class="per-serving-label">per serving</span></div>
           <div class="nutrition-grid" id="nutrition-grid"></div>
         </div>
@@ -105,23 +105,20 @@
           <ol class="steps-list" id="steps-list"></ol>
         </div>
         <div class="detail-actions">
-          <button class="btn-ghost full-width" id="btn-made-it" onclick="markAsMade()" style="color:var(--clr-coral);border-color:var(--clr-coral)">✅ Mark as made</button>
-          <div id="made-it-info" style="text-align:center;font-size:12px;color:var(--clr-muted);margin-top:-4px;margin-bottom:4px"></div>
           <button class="btn-primary full-width" onclick="addToShoppingList()">🛒 Add to shopping list</button>
-          <button class="btn-primary full-width" style="background:var(--clr-coral);border-color:var(--clr-coral);margin-top:8px" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
+          <button class="btn-primary full-width" style="background:var(--clr-ink)" onclick="addToPlannerFromDetail()">📅 Add to meal plan</button>
           <button class="btn-ghost full-width" onclick="startCookMode()">👨‍🍳 Start cooking mode</button>
-          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open PDF in Drive</button>
+          <button class="btn-ghost full-width" id="btn-open-drive" onclick="openInCloud()">☁️ Open in Drive</button>
           <button class="btn-ghost full-width hidden" id="btn-save-drive" onclick="saveCurrentRecipeToDrive()" style="color:var(--clr-coral);border-color:var(--clr-coral)">☁️ Save to Google Drive</button>
-          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()" style="font-size:13px">✨ Re-extract from Drive file</button>
+          <button class="btn-ghost full-width hidden" id="btn-reextract" onclick="reExtractCurrentRecipe()">✨ Re-extract from Drive file</button>
           <button class="btn-ghost full-width" onclick="printCurrentRecipe()">🖨️ Print recipe</button>
-          <div style="display:flex;gap:8px;margin-top:0">
+          <div style="display:flex;gap:8px">
             <button class="btn-ghost full-width" onclick="openEditRecipeModal()" style="flex:1">✏️ Edit recipe</button>
-            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red,#c0392b);border-color:var(--clr-red,#c0392b);padding:12px 16px">🗑️</button>
+            <button class="btn-ghost" onclick="confirmDeleteRecipe()" style="color:var(--clr-red);border-color:var(--clr-red);padding:11px 16px">🗑️</button>
           </div>
         </div>
       </div>
     </aside>
-
     <!-- COOK MODE -->
     <div id="screen-cook" class="cook-overlay hidden">
       <div class="cook-header">
