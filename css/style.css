@@ -117,34 +117,55 @@ ul,ol{list-style:none}
   min-height:0;
 }
 
-/* ── SCREEN AREA — full width by default, shrinks when detail opens ── */
-.screen-area{
+/* ── APP BODY ── */
+.app-body{
   flex:1;
-  min-width:0;
+  display:flex;
+  flex-direction:row;
+  overflow:hidden;
+  min-height:0;
+  position:relative;
+}
+
+/* ── SCREEN AREA — always full width, shrinks only when detail is open ── */
+.screen-area{
+  position:absolute;
+  top:0;left:0;right:0;bottom:0;
   display:flex;
   flex-direction:column;
   overflow:hidden;
-  transition:flex .25s ease;
+  transition:right .25s ease;
 }
-.screen{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:20px 24px 40px;display:none;min-height:0}
+/* When detail panel is open, screen-area shrinks to 60% */
+.app-body.split .screen-area{
+  right:40%;
+}
+
+.screen{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding:20px 24px 40px;
+  display:none;
+  min-height:0;
+}
 .screen.active{display:block;height:100%;overflow-y:auto}
 
-/* ── DETAIL PANEL — hidden (width:0) until recipe opens, then 40% ── */
-/* Desktop: detail panel hidden until open */
+/* ── DETAIL PANEL — slides in from right ── */
 .detail-panel{
-  width:0;
-  flex-shrink:0;
+  position:absolute;
+  top:0;right:0;bottom:0;
+  width:40%;
   background:var(--clr-surface);
   display:none;
   flex-direction:column;
   overflow:hidden;
-  transition:width .25s ease;
-  border-left:0px solid var(--clr-border);
+  border-left:1px solid var(--clr-border);
+  box-shadow:-4px 0 20px rgba(14,53,40,0.08);
 }
 .detail-panel.open{
   display:flex;
-  width:40%;
-  border-left:1px solid var(--clr-border);
 }
 
 /* ── BOTTOM NAV — mobile only, hidden on desktop ── */
@@ -422,14 +443,15 @@ ul,ol{list-style:none}
    ══════════════════════════════════════════════════════ */
 @media(max-width:768px){
   :root{--detail-w:100%;--list-w:100%}
-  .app-body{flex-direction:column}
-  .screen-area{width:100%;border-right:none}
+  .app-body{position:relative}
+  .screen-area{position:absolute;top:0;left:0;right:0;bottom:0;padding-bottom:var(--nav-h)}
+  .app-body.split .screen-area{right:0} /* full width on mobile even when detail open */
   .detail-panel{
     position:fixed;top:0;left:0;right:0;bottom:0;
+    width:100%!important;
     z-index:150;
-    display:flex!important;
   }
-  .detail-panel.hidden{display:none!important}
+  .detail-panel.open{display:flex}
   .top-nav .tn-label{display:none}/* hide text labels on mobile, icons only */
   .top-nav-brand span:last-child{display:none}/* hide brand text */
   .planner-grid{grid-template-columns:1fr}
