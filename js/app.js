@@ -60,8 +60,16 @@ function navigate(screen) {
   document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); });
   const target = document.getElementById('screen-' + screen);
   if (target) { target.classList.remove('hidden'); target.classList.add('active'); }
-  document.querySelectorAll('.sn-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+
+  // Update top nav active state
+  document.querySelectorAll('.tn-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+  // Update mobile bottom nav active state
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
+
+  // Show cuisine bar only on recipes screen
+  const cuisineBar = document.getElementById('cuisine-bar');
+  if (cuisineBar) cuisineBar.classList.toggle('hidden', screen !== 'recipes');
+
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
@@ -106,15 +114,32 @@ function updateCloudBadge() {
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
 function buildCuisineChips() {
+  // Populate both the cuisine bar (top) and the hidden chip container (used by JS)
+  const bar       = document.getElementById('cuisine-bar');
   const container = document.getElementById('cuisine-chips');
-  if (!container) return;
-  [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
-  getCuisines().forEach(c => {
-    const btn = document.createElement('button');
-    btn.className='chip'; btn.dataset.filter=c; btn.textContent=c;
-    btn.onclick=()=>setFilter(btn,c);
-    container.appendChild(btn);
-  });
+
+  // Clear existing cuisine chips from bar (keep "All" chip)
+  if (bar) {
+    [...bar.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+    getCuisines().forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'chip'; btn.dataset.filter = c; btn.textContent = c;
+      btn.onclick = () => setFilter(btn, c);
+      bar.appendChild(btn);
+    });
+  }
+
+  // Also keep hidden container in sync for compatibility
+  if (container) {
+    [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+    getCuisines().forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'chip'; btn.dataset.filter = c; btn.textContent = c;
+      btn.onclick = () => setFilter(btn, c);
+      container.appendChild(btn);
+    });
+  }
+
   updateCuisineDatalist();
 }
 
@@ -126,9 +151,11 @@ function updateCuisineDatalist() {
 }
 
 function setFilter(el, filter) {
-  document.querySelectorAll('#cuisine-chips .chip').forEach(c=>c.classList.remove('chip-active'));
-  if (el) el.classList.add('chip-active');
-  state.currentFilter=filter; applyFilters();
+  // Update active state in both cuisine bar and hidden container
+  document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('chip-active'));
+  // Highlight all matching chips (bar + hidden container)
+  document.querySelectorAll(`[data-filter="${filter}"]`).forEach(c => c.classList.add('chip-active'));
+  state.currentFilter = filter; applyFilters();
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────────────
@@ -177,8 +204,11 @@ function renderRecipes(list) {
   if (!list.length){stNoRes?.classList.remove('hidden');return;}
   if (countLbl) countLbl.textContent=list.length+' recipe'+(list.length!==1?'s':'');
   list.forEach(recipe=>{
-    const card=document.createElement('div');
-    card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0');
+    const card = document.createElement('div');
+    card.className = 'recipe-card';
+    card.dataset.id = recipe.id;
+    card.setAttribute('role','listitem');
+    card.setAttribute('tabindex','0');
     const thumb = recipe.thumbImage
       ? `<img src="${recipe.thumbImage}" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px)" />`
       : (recipe.emoji || '🍽️');
@@ -234,17 +264,25 @@ function openRecipe(recipe) {
   if (btnSave) btnSave.classList.toggle('hidden', !isImported);
   if (btnOpen) btnOpen.classList.toggle('hidden', isImported);
 
-  const panel=document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-panel');
   if (!panel) return;
 
   if (state.isDesktop()) {
     panel.classList.remove('hidden');
-    panel.style.cssText='';
+    panel.style.cssText = '';
+    // Highlight active card in list
+    document.querySelectorAll('.recipe-card').forEach(c => {
+      c.classList.toggle('active-card', c.dataset.id === recipe.id);
+    });
   } else {
-    // FIX: Use viewport units so it works in portrait on all phones
-    panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;';
+    panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:150;';
     panel.classList.remove('hidden');
-    panel.scrollTop=0;
+    panel.querySelector('.detail-body')?.scrollTo(0, 0);
+  }
+
+  // Auto-extract if recipe has no ingredients and has a Drive file
+  if ((!recipe.ingredients || recipe.ingredients.length === 0) && recipe.driveFileId) {
+    setTimeout(() => reExtractCurrentRecipe(), 400);
   }
 }
 
@@ -263,9 +301,7 @@ function renderIngredients() {
   const ings=state.currentRecipe.ingredients||[];
   if (ings.length===0) {
     list.innerHTML=`<li style="padding:12px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
-      No ingredients extracted yet.${state.currentRecipe.driveFileId
-        ?'<br><button onclick="reExtractCurrentRecipe()" class="btn-primary" style="margin-top:10px;font-size:13px;padding:8px 16px">✨ Extract with AI</button>'
-        :''}</li>`;
+      Extracting recipe…</li>`;
   } else {
     list.innerHTML=ings.map(i=>
       `<li class="ingredient-item"><span class="ingredient-amount">${scaleAmount(i.amount||'',ratio)}</span><span>${i.item}</span></li>`
