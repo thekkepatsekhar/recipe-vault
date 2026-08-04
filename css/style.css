@@ -264,7 +264,7 @@ ul,ol{list-style:none}
 .search-clear{font-size:13px;color:var(--clr-muted);padding:4px;background:var(--clr-paper-mid);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
 
 /* ── RECIPE GRID ── */
-.recipe-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.recipe-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .recipe-card{background:#ffffff;border:1px solid var(--clr-border);border-radius:var(--radius-md);padding:12px 14px;cursor:pointer;transition:box-shadow .15s,transform .12s;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-card)}
 .recipe-card:hover{box-shadow:var(--shadow-lift);transform:translateY(-1px)}
 .recipe-card.active-card{border-color:var(--clr-coral);box-shadow:0 0 0 2px rgba(232,98,58,.2)}
@@ -426,6 +426,7 @@ ul,ol{list-style:none}
   .top-nav-brand span:last-child{display:none}/* hide brand text */
   .planner-grid{grid-template-columns:1fr}
   .import-fields-grid{grid-template-columns:1fr}
+  .recipe-grid{grid-template-columns:1fr}
   .import-card{border:none;border-radius:0;box-shadow:none;padding:0}
   .import-input-row{flex-direction:column}
   .page-header{flex-direction:column;gap:8px}
@@ -449,3 +450,6 @@ ul,ol{list-style:none}
   .nav-badge{position:absolute;top:6px;right:calc(50% - 18px);background:var(--clr-coral);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
   .cuisine-bar{padding:0 8px;gap:5px}
 }
+
+/* Single column when detail panel is open — 60% is too narrow for 2 cols */
+.app-body.split .recipe-grid{grid-template-columns:1fr}
