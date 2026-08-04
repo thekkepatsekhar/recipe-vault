@@ -459,5 +459,11 @@ ul,ol{list-style:none}
   .cuisine-bar{padding:0 8px;gap:5px}
 }
 
+/* Non-recipe screens always get full screen-area width */
+#screen-planner.active,
+#screen-shopping.active,
+#screen-import.active,
+#screen-settings.active { width:100% }
+
 /* Single column when detail panel is open — 60% is too narrow for 2 cols */
 .app-body.split .recipe-grid{grid-template-columns:1fr}
