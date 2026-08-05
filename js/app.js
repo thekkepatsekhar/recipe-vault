@@ -113,28 +113,10 @@ function updateCloudBadge() {
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
 // ── NAV SEARCH ───────────────────────────────────────────────────────────────
-function toggleNavSearch() {
-  const input = document.getElementById('nav-search-input');
-  const clear = document.getElementById('nav-search-clear');
-  if (!input) return;
-  const isOpen = input.classList.contains('open');
-  if (isOpen) {
-    clearNavSearch();
-  } else {
-    input.classList.remove('hidden');
-    input.classList.add('open');
-    input.focus();
-    // Navigate to recipes if not already there
-    if (!document.getElementById('screen-recipes')?.classList.contains('active')) {
-      navigate('recipes');
-    }
-  }
-}
-
 function clearNavSearch() {
   const input = document.getElementById('nav-search-input');
   const clear = document.getElementById('nav-search-clear');
-  if (input) { input.value = ''; input.classList.remove('open'); input.classList.add('hidden'); }
+  if (input) input.value = '';
   if (clear) clear.classList.add('hidden');
   state.currentSearch = '';
   applyFilters();
@@ -149,7 +131,6 @@ document.addEventListener('DOMContentLoaded', () => {
     state.currentSearch = q;
     const clear = document.getElementById('nav-search-clear');
     if (clear) clear.classList.toggle('hidden', !q);
-    // Navigate to recipes when searching
     if (q && !document.getElementById('screen-recipes')?.classList.contains('active')) {
       navigate('recipes');
     }
