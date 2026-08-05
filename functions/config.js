@@ -12,6 +12,9 @@ export async function onRequest(context) {
 })();`;
 
   return new Response(js, {
-    headers: { 'Content-Type': 'application/javascript' },
+    headers: {
+      'Content-Type': 'application/javascript',
+      'Cache-Control': 'no-store',
+    },
   });
 }
