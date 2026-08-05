@@ -88,8 +88,14 @@ function renderSettings() {
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
 
   // Show API key status indicators (keys are loaded from config.js)
+  const deepseekStatus  = document.getElementById('deepseek-status');
   const anthropicStatus = document.getElementById('anthropic-status');
   const youtubeStatus   = document.getElementById('youtube-status');
+  if (deepseekStatus) {
+    const key = localStorage.getItem('rv_deepseek_key') || '';
+    deepseekStatus.textContent = key ? '✓ Connected' : '✗ Not configured';
+    deepseekStatus.style.color = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
+  }
   if (anthropicStatus) {
     const key = localStorage.getItem('rv_anthropic_key') || '';
     anthropicStatus.textContent  = key ? '✓ Connected' : '✗ Not configured';
@@ -356,10 +362,10 @@ function openRecipe(recipe) {
     panel.querySelector('.detail-body')?.scrollTo(0, 0);
   }
 
-  // Auto-extract if recipe has no ingredients and has a Drive file
-  if ((!recipe.ingredients || recipe.ingredients.length === 0) && recipe.driveFileId) {
-    setTimeout(() => reExtractCurrentRecipe(), 400);
-  }
+  // Do NOT auto-extract — user must tap Re-extract manually to control API costs
+  // Show a prompt instead
+  const reExtractBtn = document.getElementById('btn-reextract');
+  if (reExtractBtn) reExtractBtn.classList.toggle('hidden', !recipe.driveFileId);
 }
 
 function closeDetail() {
@@ -379,8 +385,10 @@ function renderIngredients() {
   const ratio=state.currentServings/state.baseServings;
   const ings=state.currentRecipe.ingredients||[];
   if (ings.length===0) {
-    list.innerHTML=`<li style="padding:12px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
-      Extracting recipe…</li>`;
+    list.innerHTML=`<li style="padding:16px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
+      No ingredients extracted yet.${state.currentRecipe.driveFileId
+        ?'<br><button onclick="reExtractCurrentRecipe()" class="btn-primary" style="margin-top:12px;font-size:13px;padding:9px 18px">✨ Extract with AI</button>'
+        :''}</li>`;
   } else {
     list.innerHTML=ings.map(i=>
       `<li class="ingredient-item"><span class="ingredient-amount">${scaleAmount(i.amount||'',ratio)}</span><span>${i.item}</span></li>`
