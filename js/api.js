@@ -1,13 +1,55 @@
 // ── RECIPE VAULT — AI API ─────────────────────────────────────────────────────
-// Uses Anthropic Claude — add your key in Settings
-// Get a key at https://console.anthropic.com
+// Primary: DeepSeek V4 Flash (very cheap — $0.14/$0.28 per million tokens)
+// Fallback: Anthropic Claude Haiku (if DeepSeek fails)
+// Get DeepSeek key at: https://platform.deepseek.com
+// Get Anthropic key at: https://console.anthropic.com
 
 async function callClaude(messages, maxTokens = 2500) {
-  const apiKey = localStorage.getItem('rv_anthropic_key');
-  if (!apiKey) throw new Error('No Anthropic API key set — add it in Settings');
-  return callAnthropic(messages, apiKey, maxTokens);
+  const deepseekKey  = localStorage.getItem('rv_deepseek_key');
+  const anthropicKey = localStorage.getItem('rv_anthropic_key');
+
+  // Try DeepSeek first (cheapest)
+  if (deepseekKey) {
+    try {
+      return await callDeepSeek(messages, deepseekKey, maxTokens);
+    } catch(e) {
+      console.warn('DeepSeek failed, falling back to Anthropic:', e.message);
+      if (anthropicKey) return await callAnthropic(messages, anthropicKey, maxTokens);
+      throw e;
+    }
+  }
+
+  // Fall back to Anthropic
+  if (anthropicKey) return await callAnthropic(messages, anthropicKey, maxTokens);
+
+  throw new Error('No AI API key configured — check Settings');
 }
 
+// ── DEEPSEEK (OpenAI-compatible API) ─────────────────────────────────────────
+async function callDeepSeek(messages, apiKey, maxTokens) {
+  const res = await fetch('https://api.deepseek.com/chat/completions', {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + apiKey,
+    },
+    body: JSON.stringify({
+      model:      'deepseek-v4-flash',
+      max_tokens: maxTokens,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('DeepSeek error ' + res.status + ': ' + (err.error?.message || res.statusText));
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// ── ANTHROPIC CLAUDE (fallback) ───────────────────────────────────────────────
 async function callAnthropic(messages, apiKey, maxTokens) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method:  'POST',
@@ -23,10 +65,12 @@ async function callAnthropic(messages, apiKey, maxTokens) {
       messages,
     }),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error('Anthropic error ' + res.status + ': ' + (err.error?.message || res.statusText));
   }
+
   const data = await res.json();
   return data.content.map(c => c.text || '').join('');
 }
@@ -41,7 +85,7 @@ const METRIC_INSTRUCTION = `Convert measurements to metric:
 - Keep "pinch", "handful", "to taste" as-is
 - Common: 1 cup flour≈120g, 1 cup sugar≈200g, 1 cup butter≈225g, 1 cup milk≈240ml, 1 tbsp≈15ml, 1 tsp≈5ml, 1 oz≈28g, 1 lb≈450g`;
 
-// ── RECIPE EXTRACTION ────────────────────────────────────────────────────────
+// ── RECIPE EXTRACTION ─────────────────────────────────────────────────────────
 async function extractRecipeWithAI(recipeNameHint, cuisineHint, pdfText) {
   const prompt = `Extract this recipe and return ONLY valid JSON (no markdown):
 {"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""],"nutrition":null}
