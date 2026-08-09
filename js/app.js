@@ -911,14 +911,26 @@ async function extractFromPastedText() {
   document.getElementById('paste-error')?.classList.add('hidden');
 
   try {
-    const prompt = `Structure this recipe text and return ONLY valid JSON (no markdown):
+    const prompt = `Structure this recipe text into JSON. Return ONLY valid JSON (no markdown, no explanation):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 Recipe text:
-${text.slice(0, 4000)}`;
+${text.slice(0, 2500)}`;
 
-    const recipe = await importRecipeFromURL(prompt);
+    const raw     = await callClaude([{ role: 'user', content: prompt }], 2500);
+    let   cleaned = raw.replace(/```json|```/g, '').trim();
 
-    // Populate the direct fields
+    // Repair truncated JSON
+    if (!cleaned.endsWith('}')) {
+      const last = cleaned.lastIndexOf('}');
+      if (last > 0) {
+        cleaned = cleaned.slice(0, last + 1);
+        while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
+        while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
+      }
+    }
+
+    const recipe = JSON.parse(cleaned);
+
     if (recipe.name)        document.getElementById('paste-name').value        = recipe.name;
     if (recipe.cuisine)     document.getElementById('paste-cuisine').value     = recipe.cuisine;
     if (recipe.time)        document.getElementById('paste-time').value        = recipe.time;
@@ -926,7 +938,6 @@ ${text.slice(0, 4000)}`;
     if (recipe.ingredients) document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
     if (recipe.steps)       document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n');
 
-    // Clear the paste text area
     document.getElementById('paste-text').value = '';
     showToast('Recipe structured ✓ — review the fields and save');
   } catch(e) {
