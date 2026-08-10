@@ -1470,7 +1470,6 @@ async function batchExtractAllRecipes() {
   const btn    = document.getElementById('btn-batch-extract');
   const status = document.getElementById('batch-extract-status');
 
-  // Find all recipes that need extraction
   const toExtract = state.recipes.filter(r =>
     r.driveFileId && (!r.ingredients || r.ingredients.length === 0)
   );
@@ -1483,9 +1482,10 @@ async function batchExtractAllRecipes() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting…'; }
   if (status) { status.style.display = 'block'; status.textContent = `Starting extraction of ${toExtract.length} recipes…`; }
 
-  let done = 0;
+  let done   = 0;
   let failed = 0;
-  const BATCH = 3; // Small batches to avoid overwhelming the API
+  const failures = []; // Track names and reasons
+  const BATCH = 3;
 
   for (let i = 0; i < toExtract.length; i += BATCH) {
     const batch = toExtract.slice(i, i + BATCH);
@@ -1496,7 +1496,6 @@ async function batchExtractAllRecipes() {
         const text     = await extractPDFText(recipe.driveFileId, mimeType);
         const parsed   = await extractRecipeWithAI(recipe.name, recipe.cuisine, text);
 
-        // Update recipe in state and cache
         recipe.ingredients = parsed.ingredients || [];
         recipe.steps       = parsed.steps       || [];
         recipe.nutrition   = parsed.nutrition   || null;
@@ -1509,30 +1508,38 @@ async function batchExtractAllRecipes() {
         const cache = getCachedRecipes();
         cache['drive_' + recipe.driveFileId] = recipe;
         saveCachedRecipes(cache);
-
         done++;
       } catch(e) {
-        console.warn('Batch extract failed for', recipe.name, e.message);
+        console.warn('Batch extract failed for', recipe.name, ':', e.message);
         failed++;
+        failures.push({ name: recipe.name, reason: e.message });
       }
     }));
 
-    // Update progress
-    const total     = toExtract.length;
-    const remaining = total - done - failed;
-    if (status) status.textContent = `Extracted ${done} of ${total}${failed > 0 ? ' (' + failed + ' failed)' : ''}… ${remaining} remaining`;
+    const remaining = toExtract.length - done - failed;
+    if (status) status.textContent = `Extracted ${done} of ${toExtract.length}${failed > 0 ? ' (' + failed + ' failed)' : ''}… ${remaining} remaining`;
 
-    // Small delay between batches to be gentle on the API
     if (i + BATCH < toExtract.length) await new Promise(r => setTimeout(r, 500));
   }
 
-  // Refresh the recipe list
   applyFilters();
 
-  const msg = `Done! Extracted ${done} recipes${failed > 0 ? ', ' + failed + ' failed' : ''} ✓`;
-  if (status) status.textContent = msg;
+  // Show summary with failure details
+  if (failures.length > 0) {
+    const failList = failures.map(f => `• ${f.name}: ${f.reason}`).join('\n');
+    if (status) {
+      status.innerHTML = `✓ Extracted ${done} recipes<br>` +
+        `<span style="color:var(--clr-red)">✗ ${failed} failed — tap to see details</span>`;
+      status.style.cursor = 'pointer';
+      status.onclick = () => alert(`Failed extractions:\n\n${failList}`);
+    }
+    showToast(`Done — ${done} extracted, ${failed} failed`);
+  } else {
+    if (status) status.textContent = `✓ All ${done} recipes extracted successfully!`;
+    showToast(`All ${done} recipes extracted ✓`);
+  }
+
   if (btn) { btn.disabled = false; btn.textContent = '✨ Extract all unextracted recipes'; }
-  showToast(msg);
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
