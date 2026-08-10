@@ -94,7 +94,7 @@ Recipe: "${recipeNameHint}" (${cuisineHint || 'Unknown'})
 Text: ${pdfText ? pdfText.slice(0, 1200) : '(use culinary knowledge)'}
 
 ${METRIC_INSTRUCTION}
-Keep steps concise. Max 12 ingredients, max 10 steps.`;`;
+Keep steps concise. Max 12 ingredients, max 10 steps.`;
 
   const raw     = await callClaude([{ role: 'user', content: prompt }]);
   let   cleaned = raw.replace(/```json|```/g, '').trim();
