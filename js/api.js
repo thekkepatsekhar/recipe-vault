@@ -87,16 +87,14 @@ const METRIC_INSTRUCTION = `Convert measurements to metric:
 
 // ── RECIPE EXTRACTION ─────────────────────────────────────────────────────────
 async function extractRecipeWithAI(recipeNameHint, cuisineHint, pdfText) {
-  const prompt = `Extract this recipe and return ONLY valid JSON (no markdown):
-{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""],"nutrition":null}
+  const prompt = `Extract this recipe. Return ONLY valid JSON, no markdown, be concise:
+{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 
-Recipe name: "${recipeNameHint}"
-Cuisine: "${cuisineHint || 'Unknown'}"
-PDF text: ${pdfText ? pdfText.slice(0, 2000) : '(no text — use your culinary knowledge of this recipe)'}
+Recipe: "${recipeNameHint}" (${cuisineHint || 'Unknown'})
+Text: ${pdfText ? pdfText.slice(0, 1200) : '(use culinary knowledge)'}
 
 ${METRIC_INSTRUCTION}
-
-If PDF text is missing, use culinary knowledge for "${recipeNameHint}".`;
+Keep steps concise. Max 12 ingredients, max 10 steps.`;`;
 
   const raw     = await callClaude([{ role: 'user', content: prompt }]);
   let   cleaned = raw.replace(/```json|```/g, '').trim();
