@@ -1494,7 +1494,32 @@ async function batchExtractAllRecipes() {
       try {
         const mimeType = recipe.mimeType || null;
         const text     = await extractPDFText(recipe.driveFileId, mimeType);
-        const parsed   = await extractRecipeWithAI(recipe.name, recipe.cuisine, text);
+
+        // Try extraction — on JSON error, retry with simpler prompt
+        let parsed;
+        try {
+          parsed = await extractRecipeWithAI(recipe.name, recipe.cuisine, text);
+        } catch(e) {
+          if (e.message.includes('JSON') || e.message.includes('json')) {
+            // Retry with shorter text and simpler prompt
+            console.log('Retrying with shorter prompt for:', recipe.name);
+            const shortPrompt = `Give me a recipe for "${recipe.name}" (${recipe.cuisine}) as JSON only:
+{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`;
+            const raw     = await callClaude([{ role: 'user', content: shortPrompt }], 2000);
+            let   cleaned = raw.replace(/```json|```/g, '').trim();
+            if (!cleaned.endsWith('}')) {
+              const last = cleaned.lastIndexOf('}');
+              if (last > 0) {
+                cleaned = cleaned.slice(0, last + 1);
+                while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
+                while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
+              }
+            }
+            parsed = JSON.parse(cleaned);
+          } else {
+            throw e;
+          }
+        }
 
         recipe.ingredients = parsed.ingredients || [];
         recipe.steps       = parsed.steps       || [];
