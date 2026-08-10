@@ -1465,6 +1465,76 @@ function updateMadeItButton() {
   }
 }
 
+// ── BATCH EXTRACT ALL RECIPES ─────────────────────────────────────────────────
+async function batchExtractAllRecipes() {
+  const btn    = document.getElementById('btn-batch-extract');
+  const status = document.getElementById('batch-extract-status');
+
+  // Find all recipes that need extraction
+  const toExtract = state.recipes.filter(r =>
+    r.driveFileId && (!r.ingredients || r.ingredients.length === 0)
+  );
+
+  if (toExtract.length === 0) {
+    showToast('All recipes already extracted! ✓');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting…'; }
+  if (status) { status.style.display = 'block'; status.textContent = `Starting extraction of ${toExtract.length} recipes…`; }
+
+  let done = 0;
+  let failed = 0;
+  const BATCH = 3; // Small batches to avoid overwhelming the API
+
+  for (let i = 0; i < toExtract.length; i += BATCH) {
+    const batch = toExtract.slice(i, i + BATCH);
+
+    await Promise.all(batch.map(async recipe => {
+      try {
+        const mimeType = recipe.mimeType || null;
+        const text     = await extractPDFText(recipe.driveFileId, mimeType);
+        const parsed   = await extractRecipeWithAI(recipe.name, recipe.cuisine, text);
+
+        // Update recipe in state and cache
+        recipe.ingredients = parsed.ingredients || [];
+        recipe.steps       = parsed.steps       || [];
+        recipe.nutrition   = parsed.nutrition   || null;
+        if (parsed.time && parsed.time !== '—') recipe.time = parsed.time;
+        if (parsed.servings) recipe.servings = parsed.servings;
+
+        const idx = state.recipes.findIndex(r => r.id === recipe.id);
+        if (idx !== -1) state.recipes[idx] = { ...state.recipes[idx], ...recipe };
+
+        const cache = getCachedRecipes();
+        cache['drive_' + recipe.driveFileId] = recipe;
+        saveCachedRecipes(cache);
+
+        done++;
+      } catch(e) {
+        console.warn('Batch extract failed for', recipe.name, e.message);
+        failed++;
+      }
+    }));
+
+    // Update progress
+    const total     = toExtract.length;
+    const remaining = total - done - failed;
+    if (status) status.textContent = `Extracted ${done} of ${total}${failed > 0 ? ' (' + failed + ' failed)' : ''}… ${remaining} remaining`;
+
+    // Small delay between batches to be gentle on the API
+    if (i + BATCH < toExtract.length) await new Promise(r => setTimeout(r, 500));
+  }
+
+  // Refresh the recipe list
+  applyFilters();
+
+  const msg = `Done! Extracted ${done} recipes${failed > 0 ? ', ' + failed + ' failed' : ''} ✓`;
+  if (status) status.textContent = msg;
+  if (btn) { btn.disabled = false; btn.textContent = '✨ Extract all unextracted recipes'; }
+  showToast(msg);
+}
+
 // ── MODALS ────────────────────────────────────────────────────────────────────
 function closeModal(id){document.getElementById(id)?.classList.add('hidden');}
 document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))e.target.classList.add('hidden');});
