@@ -261,7 +261,7 @@
           </div>
           <div class="settings-group">
           <div class="settings-label">About</div>
-          <div class="settings-row"><span class="settings-row-label">Version</span><span class="settings-row-value">1.6.5</span></div>
+          <div class="settings-row"><span class="settings-row-label">Version</span><span class="settings-row-value">1.0</span></div>
           <div class="settings-row"><span class="settings-row-label">Recipes loaded</span><span class="settings-row-value" id="sett-recipe-count">—</span></div>
           <div class="settings-row"><span class="settings-row-label">Planned meals</span><span class="settings-row-value" id="sett-meal-count">—</span></div>
         </div>
@@ -329,8 +329,21 @@
         <span class="cook-title" id="cook-recipe-name">—</span>
         <button class="icon-btn-light" id="voice-toggle" onclick="toggleVoice()">🔇 Voice off</button>
       </div>
+      <div class="cook-body">
+        <div class="cook-progress">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <span class="progress-label" id="progress-label">Step 1 of 6</span>
+        </div>
+        <div class="cook-step-card"><p class="cook-step-text" id="cook-step-text">—</p></div>
+        <div class="cook-controls">
+          <button class="cook-nav-btn" id="btn-prev-step" onclick="changeStep(-1)">← Previous</button>
+          <button class="cook-nav-btn cook-nav-next" id="btn-next-step" onclick="changeStep(1)">Next →</button>
+        </div>
+        <div class="cook-voice-hint" id="voice-hint">🎙️ Say "next step", "repeat", or "go back"</div>
+      </div>
+    </div>
 
-    <nav class="bottom-nav">
+  <nav class="bottom-nav">
     <button class="nav-item active" data-screen="recipes"  onclick="navigate('recipes')"> <span class="nav-icon">📚</span><span class="nav-label">Recipes</span></button>
     <button class="nav-item"        data-screen="planner"  onclick="navigate('planner')"> <span class="nav-icon">📅</span><span class="nav-label">Planner</span></button>
     <button class="nav-item"        data-screen="shopping" onclick="navigate('shopping')"><span class="nav-icon">🛒</span><span class="nav-label">List</span><span class="nav-badge hidden" id="list-badge-mobile">0</span></button>
