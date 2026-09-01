@@ -1,31 +1,14 @@
 // ── RECIPE VAULT — AI API ─────────────────────────────────────────────────────
-// Primary: DeepSeek V4 Flash (very cheap — $0.14/$0.28 per million tokens)
-// Fallback: Anthropic Claude Haiku (if DeepSeek fails)
-// Get DeepSeek key at: https://platform.deepseek.com
-// Get Anthropic key at: https://console.anthropic.com
+// Uses DeepSeek only — ultra cheap at $0.14/$0.28 per million tokens
+// Get a key at: https://platform.deepseek.com
 
 async function callClaude(messages, maxTokens = 2500) {
-  const deepseekKey  = localStorage.getItem('rv_deepseek_key');
-  const anthropicKey = localStorage.getItem('rv_anthropic_key');
-
-  // Try DeepSeek first (cheapest)
-  if (deepseekKey) {
-    try {
-      return await callDeepSeek(messages, deepseekKey, maxTokens);
-    } catch(e) {
-      console.warn('DeepSeek failed, falling back to Anthropic:', e.message);
-      if (anthropicKey) return await callAnthropic(messages, anthropicKey, maxTokens);
-      throw e;
-    }
-  }
-
-  // Fall back to Anthropic
-  if (anthropicKey) return await callAnthropic(messages, anthropicKey, maxTokens);
-
-  throw new Error('No AI API key configured — check Settings');
+  const apiKey = localStorage.getItem('rv_deepseek_key');
+  if (!apiKey) throw new Error('No DeepSeek API key configured — check Settings');
+  return callDeepSeek(messages, apiKey, maxTokens);
 }
 
-// ── DEEPSEEK (OpenAI-compatible API) ─────────────────────────────────────────
+// ── DEEPSEEK ──────────────────────────────────────────────────────────────────
 async function callDeepSeek(messages, apiKey, maxTokens) {
   const res = await fetch('https://api.deepseek.com/chat/completions', {
     method:  'POST',
@@ -34,45 +17,17 @@ async function callDeepSeek(messages, apiKey, maxTokens) {
       'Authorization': 'Bearer ' + apiKey,
     },
     body: JSON.stringify({
-      model:      'deepseek-v4-flash',
+      model:      'deepseek-chat',
       max_tokens: maxTokens,
       messages,
     }),
   });
-
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error('DeepSeek error ' + res.status + ': ' + (err.error?.message || res.statusText));
   }
-
   const data = await res.json();
   return data.choices?.[0]?.message?.content || '';
-}
-
-// ── ANTHROPIC CLAUDE (fallback) ───────────────────────────────────────────────
-async function callAnthropic(messages, apiKey, maxTokens) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method:  'POST',
-    headers: {
-      'Content-Type':         'application/json',
-      'x-api-key':            apiKey,
-      'anthropic-version':    '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      messages,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error('Anthropic error ' + res.status + ': ' + (err.error?.message || res.statusText));
-  }
-
-  const data = await res.json();
-  return data.content.map(c => c.text || '').join('');
 }
 
 // ── METRIC CONVERSION INSTRUCTION ────────────────────────────────────────────
@@ -170,8 +125,8 @@ function extractRecipeText(html) {
       const items = Array.isArray(data) ? data : [data];
       const recipe = items.find(d => d['@type']==='Recipe' || (Array.isArray(d['@type']) && d['@type'].includes('Recipe')));
       if (recipe) {
-        const ings   = (recipe.recipeIngredient||[]).join('\n');
-        const steps  = (recipe.recipeInstructions||[]).map(i=>typeof i==='string'?i:(i.text||i.name||'')).filter(Boolean).join('\n');
+        const ings  = (recipe.recipeIngredient||[]).join('\n');
+        const steps = (recipe.recipeInstructions||[]).map(i=>typeof i==='string'?i:(i.text||i.name||'')).filter(Boolean).join('\n');
         if (ings||steps) return `STRUCTURED RECIPE:\nName: ${recipe.name||''}\nTime: ${recipe.totalTime||recipe.cookTime||''}\nServings: ${recipe.recipeYield||''}\n\nINGREDIENTS:\n${ings}\n\nSTEPS:\n${steps}`;
       }
     } catch(e) {}
