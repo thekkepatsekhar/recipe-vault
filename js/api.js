@@ -79,22 +79,7 @@ async function importRecipeFromURL(prompt) {
   return JSON.parse(cleaned);
 }
 
-// ── YOUTUBE DATA API ──────────────────────────────────────────────────────────
-async function fetchYouTubeDetails(url) {
-  const apiKey  = localStorage.getItem('rv_youtube_key');
-  if (!apiKey) return null;
-  const match   = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([^&?/\s]{11})/);
-  if (!match) return null;
-  const videoId = match[1];
-  try {
-    const res  = await fetch('https://www.googleapis.com/youtube/v3/videos?part=snippet&id=' + videoId + '&key=' + apiKey);
-    if (!res.ok) throw new Error('YouTube API ' + res.status);
-    const data = await res.json();
-    const item = data.items?.[0]?.snippet;
-    if (!item) return null;
-    return { title: item.title || '', description: item.description || '', channel: item.channelTitle || '', videoId };
-  } catch(e) { console.warn('YouTube API failed:', e.message); return null; }
-}
+
 
 // ── PAGE FETCH ────────────────────────────────────────────────────────────────
 async function fetchPageContent(url) {
