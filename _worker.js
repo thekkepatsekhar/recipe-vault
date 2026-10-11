@@ -4,17 +4,13 @@ export default {
 
     if (url.pathname === '/js/config.js') {
       const js = `(function() {
-  const defaults = {
-    rv_deepseek_key: '${env.DEEPSEEK_KEY}',
-  };
+  const defaults = { rv_deepseek_key: '${env.DEEPSEEK_KEY}' };
   Object.entries(defaults).forEach(([key, value]) => {
-    if (value && !localStorage.getItem(key)) {
-      localStorage.setItem(key, value);
-    }
+    if (value && !localStorage.getItem(key)) localStorage.setItem(key, value);
   });
 })();`;
       return new Response(js, {
-        headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' },
+        headers: { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-store' }
       });
     }
 
