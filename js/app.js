@@ -224,12 +224,13 @@ function openRecipe(recipe) {
   if (!panel) return;
 
   if (state.isDesktop()) {
-    panel.classList.remove('hidden');
     panel.style.cssText='';
+    panel.classList.remove('hidden');
   } else {
     // FIX: Use viewport units so it works in portrait on all phones
     panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;';
     panel.classList.remove('hidden');
+    panel.classList.add('open');
     panel.scrollTop=0;
   }
 }
@@ -238,6 +239,7 @@ function closeDetail() {
   const panel=document.getElementById('detail-panel');
   if (!panel) return;
   panel.classList.add('hidden');
+  panel.classList.remove('open');
   panel.style.cssText='';
   state.currentRecipe=null;
 }
