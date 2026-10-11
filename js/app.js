@@ -39,6 +39,9 @@ function bootApp() {
   state.recipes = DEMO_RECIPES;
   const app = document.getElementById('app');
   if (app) app.classList.remove('hidden');
+  // Ensure detail panel starts hidden (clears any stuck inline styles from previous sessions)
+  const panel = document.getElementById('detail-panel');
+  if (panel) { panel.classList.add('hidden'); panel.style.cssText = ''; }
   updateCloudBadge();
   buildCuisineChips();
   renderRecipes(state.recipes);
@@ -48,10 +51,6 @@ function bootApp() {
   if (fp) { fp.value = state.folderPath; fp.addEventListener('change', () => { state.folderPath = fp.value.trim().replace(/^\//,''); localStorage.setItem('rv_folder', state.folderPath); }); }
   const exp = document.getElementById('export-target');
   if (exp) { exp.value = state.exportTarget; exp.addEventListener('change', () => { state.exportTarget = exp.value; localStorage.setItem('rv_export', exp.value); }); }
-  const keyField = document.getElementById('anthropic-key');
-  if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
-  const gemField = document.getElementById('gemini-key');
-  if (gemField) gemField.value = localStorage.getItem('rv_gemini_key') || '';
   initGoogleAuth();
 }
 
@@ -78,19 +77,6 @@ function renderSettings() {
   const mc = document.getElementById('sett-meal-count');
   if (rc) rc.textContent = state.recipes.length + ' recipes';
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
-  const keyField = document.getElementById('anthropic-key');
-  if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
-  const gemField = document.getElementById('gemini-key');
-  if (gemField) {
-    gemField.value = localStorage.getItem('rv_gemini_key') || '';
-    const gemStatus = document.getElementById('gemini-key-status');
-    if (gemStatus) {
-      gemStatus.textContent = gemField.value ? '✓ Gemini key active — free AI enabled' : '';
-      gemStatus.style.color = 'var(--clr-coral)';
-    }
-  }
-  const gemModel = document.getElementById('gemini-model');
-  if (gemModel) gemModel.value = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
   const ytField = document.getElementById('youtube-key');
   if (ytField) ytField.value = localStorage.getItem('rv_youtube_key') || '';
 }
