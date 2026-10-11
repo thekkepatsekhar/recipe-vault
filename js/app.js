@@ -223,13 +223,12 @@ function openRecipe(recipe) {
   const panel=document.getElementById('detail-panel');
   if (!panel) return;
 
+  panel.classList.remove('hidden');
+  panel.classList.add('open');
   if (state.isDesktop()) {
     panel.style.cssText='';
-    panel.classList.remove('hidden');
   } else {
-    // FIX: Use viewport units so it works in portrait on all phones
-    panel.classList.remove('hidden');
-    panel.classList.add('open');
+    // Mobile: overlay full screen
     panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;';
     panel.scrollTop=0;
   }
