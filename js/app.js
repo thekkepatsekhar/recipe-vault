@@ -60,21 +60,13 @@ function navigate(screen) {
   document.querySelectorAll('.screen').forEach(s => { s.classList.remove('active'); s.classList.add('hidden'); });
   const target = document.getElementById('screen-' + screen);
   if (target) { target.classList.remove('hidden'); target.classList.add('active'); }
-
-  // Update top nav active state
-  document.querySelectorAll('.tn-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
-  // Update mobile bottom nav active state
+  document.querySelectorAll('.sn-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.screen === screen));
-
-  // Show/hide cuisine bar — now handled by dropdown, close it on nav
-  closeCuisineDropdown();
-
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
   if (screen === 'import')   { resetImport(); switchImportTab('url'); }
-  // Close detail panel when leaving recipes screen
-  if (screen !== 'recipes') closeDetail();
+  if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
 }
 
 function renderSettings() {
@@ -86,26 +78,21 @@ function renderSettings() {
   const mc = document.getElementById('sett-meal-count');
   if (rc) rc.textContent = state.recipes.length + ' recipes';
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
-
-  // Show API key status indicators (keys are loaded from config.js)
-  const deepseekStatus  = document.getElementById('deepseek-status');
-  const anthropicStatus = document.getElementById('anthropic-status');
-  const youtubeStatus   = document.getElementById('youtube-status');
-  if (deepseekStatus) {
-    const key = localStorage.getItem('rv_deepseek_key') || '';
-    deepseekStatus.textContent = key ? '✓ Connected' : '✗ Not configured';
-    deepseekStatus.style.color = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
+  const keyField = document.getElementById('anthropic-key');
+  if (keyField) keyField.value = localStorage.getItem('rv_anthropic_key') || '';
+  const gemField = document.getElementById('gemini-key');
+  if (gemField) {
+    gemField.value = localStorage.getItem('rv_gemini_key') || '';
+    const gemStatus = document.getElementById('gemini-key-status');
+    if (gemStatus) {
+      gemStatus.textContent = gemField.value ? '✓ Gemini key active — free AI enabled' : '';
+      gemStatus.style.color = 'var(--clr-coral)';
+    }
   }
-  if (anthropicStatus) {
-    const key = localStorage.getItem('rv_anthropic_key') || '';
-    anthropicStatus.textContent  = key ? '✓ Connected' : '✗ Not configured';
-    anthropicStatus.style.color  = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
-  }
-  if (youtubeStatus) {
-    const key = localStorage.getItem('rv_youtube_key') || '';
-    youtubeStatus.textContent = key ? '✓ Connected' : '✗ Not configured';
-    youtubeStatus.style.color = key ? 'var(--clr-coral)' : 'var(--clr-muted)';
-  }
+  const gemModel = document.getElementById('gemini-model');
+  if (gemModel) gemModel.value = localStorage.getItem('rv_gemini_model') || 'gemini-2.0-flash';
+  const ytField = document.getElementById('youtube-key');
+  if (ytField) ytField.value = localStorage.getItem('rv_youtube_key') || '';
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -118,108 +105,16 @@ function updateCloudBadge() {
 }
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
-// ── NAV SEARCH ───────────────────────────────────────────────────────────────
-function clearNavSearch() {
-  const input = document.getElementById('nav-search-input');
-  const clear = document.getElementById('nav-search-clear');
-  if (input) input.value = '';
-  if (clear) clear.classList.add('hidden');
-  state.currentSearch = '';
-  applyFilters();
-}
-
-// Wire up nav search input
-document.addEventListener('DOMContentLoaded', () => {
-  const inp = document.getElementById('nav-search-input');
-  if (!inp) return;
-  inp.addEventListener('input', e => {
-    const q = e.target.value.trim().toLowerCase();
-    state.currentSearch = q;
-    const clear = document.getElementById('nav-search-clear');
-    if (clear) clear.classList.toggle('hidden', !q);
-    if (q && !document.getElementById('screen-recipes')?.classList.contains('active')) {
-      navigate('recipes');
-    }
-    applyFilters();
-  });
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Escape') clearNavSearch();
-  });
-});
-
-// ── CUISINE DROPDOWN ──────────────────────────────────────────────────────────
-function handleRecipesClick() {
-  const currentScreen = document.querySelector('.tn-item.active')?.dataset.screen;
-  if (currentScreen !== 'recipes') {
-    navigate('recipes');
-    return;
-  }
-  // Already on recipes — toggle dropdown
-  toggleCuisineDropdown();
-}
-
-function toggleCuisineDropdown() {
-  const menu  = document.getElementById('cuisine-dropdown');
-  const arrow = document.getElementById('tn-recipes-arrow');
-  if (!menu) return;
-  const isOpen = !menu.classList.contains('hidden');
-  if (isOpen) {
-    menu.classList.add('hidden');
-    arrow?.classList.remove('open');
-  } else {
-    menu.classList.remove('hidden');
-    arrow?.classList.add('open');
-  }
-}
-
-function closeCuisineDropdown() {
-  document.getElementById('cuisine-dropdown')?.classList.add('hidden');
-  document.getElementById('tn-recipes-arrow')?.classList.remove('open');
-}
-
-function selectCuisine(el, filter) {
-  // Update active state in dropdown
-  document.querySelectorAll('.tn-drop-item').forEach(i => i.classList.remove('active'));
-  el.classList.add('active');
-  closeCuisineDropdown();
-  state.currentFilter = filter;
-  applyFilters();
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', e => {
-  const wrap = document.getElementById('tn-recipes-wrap');
-  if (wrap && !wrap.contains(e.target)) closeCuisineDropdown();
-});
-
 function buildCuisineChips() {
-  const dropdown  = document.getElementById('cuisine-dropdown');
-  const container = document.getElementById('cuisine-chips'); // hidden, kept for compat
-
-  if (dropdown) {
-    // Keep "All recipes" button, remove old cuisine options
-    [...dropdown.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
-    getCuisines().forEach(c => {
-      const btn = document.createElement('button');
-      btn.className = 'tn-drop-item';
-      btn.dataset.filter = c;
-      btn.textContent = c;
-      btn.onclick = () => selectCuisine(btn, c);
-      dropdown.appendChild(btn);
-    });
-  }
-
-  // Keep hidden container in sync for any legacy references
-  if (container) {
-    [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
-    getCuisines().forEach(c => {
-      const btn = document.createElement('button');
-      btn.className = 'chip'; btn.dataset.filter = c; btn.textContent = c;
-      btn.onclick = () => selectCuisine(btn, c);
-      container.appendChild(btn);
-    });
-  }
-
+  const container = document.getElementById('cuisine-chips');
+  if (!container) return;
+  [...container.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+  getCuisines().forEach(c => {
+    const btn = document.createElement('button');
+    btn.className='chip'; btn.dataset.filter=c; btn.textContent=c;
+    btn.onclick=()=>setFilter(btn,c);
+    container.appendChild(btn);
+  });
   updateCuisineDatalist();
 }
 
@@ -231,11 +126,9 @@ function updateCuisineDatalist() {
 }
 
 function setFilter(el, filter) {
-  // Update active state in both cuisine bar and hidden container
-  document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('chip-active'));
-  // Highlight all matching chips (bar + hidden container)
-  document.querySelectorAll(`[data-filter="${filter}"]`).forEach(c => c.classList.add('chip-active'));
-  state.currentFilter = filter; applyFilters();
+  document.querySelectorAll('#cuisine-chips .chip').forEach(c=>c.classList.remove('chip-active'));
+  if (el) el.classList.add('chip-active');
+  state.currentFilter=filter; applyFilters();
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────────────
@@ -284,11 +177,8 @@ function renderRecipes(list) {
   if (!list.length){stNoRes?.classList.remove('hidden');return;}
   if (countLbl) countLbl.textContent=list.length+' recipe'+(list.length!==1?'s':'');
   list.forEach(recipe=>{
-    const card = document.createElement('div');
-    card.className = 'recipe-card';
-    card.dataset.id = recipe.id;
-    card.setAttribute('role','listitem');
-    card.setAttribute('tabindex','0');
+    const card=document.createElement('div');
+    card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0');
     const thumb = recipe.thumbImage
       ? `<img src="${recipe.thumbImage}" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px)" />`
       : (recipe.emoji || '🍽️');
@@ -344,39 +234,26 @@ function openRecipe(recipe) {
   if (btnSave) btnSave.classList.toggle('hidden', !isImported);
   if (btnOpen) btnOpen.classList.toggle('hidden', isImported);
 
-  const panel = document.getElementById('detail-panel');
+  const panel=document.getElementById('detail-panel');
   if (!panel) return;
 
   if (state.isDesktop()) {
     panel.classList.remove('hidden');
-    panel.classList.add('open');
-    panel.style.cssText = '';
-    document.getElementById('app-body')?.classList.add('split');
-    document.querySelectorAll('.recipe-card').forEach(c => {
-      c.classList.toggle('active-card', c.dataset.id === recipe.id);
-    });
+    panel.style.cssText='';
   } else {
+    // FIX: Use viewport units so it works in portrait on all phones
+    panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;';
     panel.classList.remove('hidden');
-    panel.classList.add('open');
-    panel.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:150;width:100%!important;';
-    panel.querySelector('.detail-body')?.scrollTo(0, 0);
+    panel.scrollTop=0;
   }
-
-  // Do NOT auto-extract — user must tap Re-extract manually to control API costs
-  // Show a prompt instead
-  const reExtractBtn = document.getElementById('btn-reextract');
-  if (reExtractBtn) reExtractBtn.classList.toggle('hidden', !recipe.driveFileId);
 }
 
 function closeDetail() {
-  const panel = document.getElementById('detail-panel');
+  const panel=document.getElementById('detail-panel');
   if (!panel) return;
-  panel.classList.remove('open');
   panel.classList.add('hidden');
-  panel.style.cssText = '';
-  document.getElementById('app-body')?.classList.remove('split');
-  state.currentRecipe = null;
-  document.querySelectorAll('.recipe-card').forEach(c => c.classList.remove('active-card'));
+  panel.style.cssText='';
+  state.currentRecipe=null;
 }
 
 function renderIngredients() {
@@ -385,9 +262,9 @@ function renderIngredients() {
   const ratio=state.currentServings/state.baseServings;
   const ings=state.currentRecipe.ingredients||[];
   if (ings.length===0) {
-    list.innerHTML=`<li style="padding:16px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
+    list.innerHTML=`<li style="padding:12px 0;text-align:center;color:var(--clr-muted);font-size:14px;list-style:none">
       No ingredients extracted yet.${state.currentRecipe.driveFileId
-        ?'<br><button onclick="reExtractCurrentRecipe()" class="btn-primary" style="margin-top:12px;font-size:13px;padding:9px 18px">✨ Extract with AI</button>'
+        ?'<br><button onclick="reExtractCurrentRecipe()" class="btn-primary" style="margin-top:10px;font-size:13px;padding:8px 16px">✨ Extract with AI</button>'
         :''}</li>`;
   } else {
     list.innerHTML=ings.map(i=>
@@ -592,7 +469,27 @@ IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ing
         while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
       }
     }
-    const parsed = JSON.parse(cleaned);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch(jsonErr) {
+      // Retry with a simpler, shorter prompt
+      console.warn('JSON parse failed, retrying with shorter prompt:', jsonErr.message);
+      const retryRaw = await callClaude([{
+        role: 'user',
+        content: `Give me a recipe for "${state.currentRecipe.name}" as JSON only, no markdown:
+{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`
+      }], 1500);
+      let retryCleaned = retryRaw.replace(/```json|```/g, '').trim();
+      const lastBrace = retryCleaned.lastIndexOf('}');
+      if (lastBrace > 0) {
+        retryCleaned = retryCleaned.slice(0, lastBrace + 1);
+        while ((retryCleaned.match(/\[/g)||[]).length > (retryCleaned.match(/\]/g)||[]).length) retryCleaned += ']';
+        while ((retryCleaned.match(/\{/g)||[]).length > (retryCleaned.match(/\}/g)||[]).length) retryCleaned += '}';
+      }
+      parsed = JSON.parse(retryCleaned);
+    }
 
     state.currentRecipe.ingredients = parsed.ingredients || [];
     state.currentRecipe.steps       = parsed.steps       || [];
@@ -911,26 +808,14 @@ async function extractFromPastedText() {
   document.getElementById('paste-error')?.classList.add('hidden');
 
   try {
-    const prompt = `Structure this recipe text into JSON. Return ONLY valid JSON (no markdown, no explanation):
+    const prompt = `Structure this recipe text and return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 Recipe text:
-${text.slice(0, 2500)}`;
+${text.slice(0, 4000)}`;
 
-    const raw     = await callClaude([{ role: 'user', content: prompt }], 2500);
-    let   cleaned = raw.replace(/```json|```/g, '').trim();
+    const recipe = await importRecipeFromURL(prompt);
 
-    // Repair truncated JSON
-    if (!cleaned.endsWith('}')) {
-      const last = cleaned.lastIndexOf('}');
-      if (last > 0) {
-        cleaned = cleaned.slice(0, last + 1);
-        while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
-        while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
-      }
-    }
-
-    const recipe = JSON.parse(cleaned);
-
+    // Populate the direct fields
     if (recipe.name)        document.getElementById('paste-name').value        = recipe.name;
     if (recipe.cuisine)     document.getElementById('paste-cuisine').value     = recipe.cuisine;
     if (recipe.time)        document.getElementById('paste-time').value        = recipe.time;
@@ -938,6 +823,7 @@ ${text.slice(0, 2500)}`;
     if (recipe.ingredients) document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
     if (recipe.steps)       document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n');
 
+    // Clear the paste text area
     document.getElementById('paste-text').value = '';
     showToast('Recipe structured ✓ — review the fields and save');
   } catch(e) {
@@ -1463,108 +1349,6 @@ function updateMadeItButton() {
     btn.style.cssText = '';
     if (info) info.textContent = '';
   }
-}
-
-// ── BATCH EXTRACT ALL RECIPES ─────────────────────────────────────────────────
-async function batchExtractAllRecipes() {
-  const btn    = document.getElementById('btn-batch-extract');
-  const status = document.getElementById('batch-extract-status');
-
-  const toExtract = state.recipes.filter(r =>
-    r.driveFileId && (!r.ingredients || r.ingredients.length === 0)
-  );
-
-  if (toExtract.length === 0) {
-    showToast('All recipes already extracted! ✓');
-    return;
-  }
-
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Extracting…'; }
-  if (status) { status.style.display = 'block'; status.textContent = `Starting extraction of ${toExtract.length} recipes…`; }
-
-  let done   = 0;
-  let failed = 0;
-  const failures = []; // Track names and reasons
-  const BATCH = 3;
-
-  for (let i = 0; i < toExtract.length; i += BATCH) {
-    const batch = toExtract.slice(i, i + BATCH);
-
-    await Promise.all(batch.map(async recipe => {
-      try {
-        const mimeType = recipe.mimeType || null;
-        const text     = await extractPDFText(recipe.driveFileId, mimeType);
-
-        // Try extraction — on JSON error, retry with simpler prompt
-        let parsed;
-        try {
-          parsed = await extractRecipeWithAI(recipe.name, recipe.cuisine, text);
-        } catch(e) {
-          if (e.message.includes('JSON') || e.message.includes('json')) {
-            // Retry with shorter text and simpler prompt
-            console.log('Retrying with shorter prompt for:', recipe.name);
-            const shortPrompt = `Give me a recipe for "${recipe.name}" (${recipe.cuisine}) as JSON only:
-{"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`;
-            const raw     = await callClaude([{ role: 'user', content: shortPrompt }], 2000);
-            let   cleaned = raw.replace(/```json|```/g, '').trim();
-            if (!cleaned.endsWith('}')) {
-              const last = cleaned.lastIndexOf('}');
-              if (last > 0) {
-                cleaned = cleaned.slice(0, last + 1);
-                while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
-                while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
-              }
-            }
-            parsed = JSON.parse(cleaned);
-          } else {
-            throw e;
-          }
-        }
-
-        recipe.ingredients = parsed.ingredients || [];
-        recipe.steps       = parsed.steps       || [];
-        recipe.nutrition   = parsed.nutrition   || null;
-        if (parsed.time && parsed.time !== '—') recipe.time = parsed.time;
-        if (parsed.servings) recipe.servings = parsed.servings;
-
-        const idx = state.recipes.findIndex(r => r.id === recipe.id);
-        if (idx !== -1) state.recipes[idx] = { ...state.recipes[idx], ...recipe };
-
-        const cache = getCachedRecipes();
-        cache['drive_' + recipe.driveFileId] = recipe;
-        saveCachedRecipes(cache);
-        done++;
-      } catch(e) {
-        console.warn('Batch extract failed for', recipe.name, ':', e.message);
-        failed++;
-        failures.push({ name: recipe.name, reason: e.message });
-      }
-    }));
-
-    const remaining = toExtract.length - done - failed;
-    if (status) status.textContent = `Extracted ${done} of ${toExtract.length}${failed > 0 ? ' (' + failed + ' failed)' : ''}… ${remaining} remaining`;
-
-    if (i + BATCH < toExtract.length) await new Promise(r => setTimeout(r, 500));
-  }
-
-  applyFilters();
-
-  // Show summary with failure details
-  if (failures.length > 0) {
-    const failList = failures.map(f => `• ${f.name}: ${f.reason}`).join('\n');
-    if (status) {
-      status.innerHTML = `✓ Extracted ${done} recipes<br>` +
-        `<span style="color:var(--clr-red)">✗ ${failed} failed — tap to see details</span>`;
-      status.style.cursor = 'pointer';
-      status.onclick = () => alert(`Failed extractions:\n\n${failList}`);
-    }
-    showToast(`Done — ${done} extracted, ${failed} failed`);
-  } else {
-    if (status) status.textContent = `✓ All ${done} recipes extracted successfully!`;
-    showToast(`All ${done} recipes extracted ✓`);
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = '✨ Extract all unextracted recipes'; }
 }
 
 // ── MODALS ────────────────────────────────────────────────────────────────────
