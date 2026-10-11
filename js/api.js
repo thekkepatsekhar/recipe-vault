@@ -79,8 +79,6 @@ async function importRecipeFromURL(prompt) {
   return JSON.parse(cleaned);
 }
 
-
-
 // ── PAGE FETCH ────────────────────────────────────────────────────────────────
 async function fetchPageContent(url) {
   try {
