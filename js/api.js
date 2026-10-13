@@ -17,7 +17,7 @@ async function callDeepSeek(messages, apiKey, maxTokens) {
       'Authorization': 'Bearer ' + apiKey,
     },
     body: JSON.stringify({
-      model:      'deepseek-flash',
+      model:      'deepseek-chat',
       max_tokens: maxTokens,
       messages,
     }),
