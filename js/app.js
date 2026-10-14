@@ -444,7 +444,7 @@ Recipe name: "${state.currentRecipe.name}"
 Cuisine: "${state.currentRecipe.cuisine}"
 PDF text: ${text ? text.slice(0, 2000) : '(no text — use your knowledge of this recipe name)'}
 IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ingredients and steps for "${state.currentRecipe.name}".`
-    }], 2500);
+    }], 4000);
 
     // Repair potentially truncated JSON
     let cleaned = raw.replace(/```json|```/g, '').trim();
@@ -467,7 +467,7 @@ IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ing
         role: 'user',
         content: `Give me a recipe for "${state.currentRecipe.name}" as JSON only, no markdown:
 {"name":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`
-      }], 1500);
+      }], 3000);
       let retryCleaned = retryRaw.replace(/```json|```/g, '').trim();
       const lastBrace = retryCleaned.lastIndexOf('}');
       if (lastBrace > 0) {
