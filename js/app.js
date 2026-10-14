@@ -91,6 +91,47 @@ function updateCloudBadge() {
 }
 
 // ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
+// ── TOP NAV DROPDOWN ──────────────────────────────────────────────────────────
+function handleRecipesClick() {
+  navigate('recipes');
+  const menu = document.getElementById('cuisine-dropdown');
+  const arrow = document.getElementById('tn-recipes-arrow');
+  if (!menu) return;
+  const isHidden = menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', !isHidden);
+  if (arrow) arrow.textContent = isHidden ? '▴' : '▾';
+  if (isHidden) {
+    // Build dropdown items from cuisines
+    [...menu.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
+    getCuisines().forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'tn-drop-item'; btn.dataset.filter = c; btn.textContent = '🍽️ ' + c;
+      btn.onclick = () => selectCuisine(btn, c);
+      menu.appendChild(btn);
+    });
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', function handler(e) {
+        if (!document.getElementById('tn-recipes-wrap').contains(e.target)) {
+          menu.classList.add('hidden');
+          if (arrow) arrow.textContent = '▾';
+          document.removeEventListener('click', handler);
+        }
+      });
+    }, 0);
+  }
+}
+
+function selectCuisine(el, filter) {
+  document.querySelectorAll('#cuisine-dropdown .tn-drop-item').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  state.currentFilter = filter; applyFilters();
+  const menu = document.getElementById('cuisine-dropdown');
+  const arrow = document.getElementById('tn-recipes-arrow');
+  if (menu) menu.classList.add('hidden');
+  if (arrow) arrow.textContent = '▾';
+}
+
 function buildCuisineChips() {
   const container = document.getElementById('cuisine-chips');
   if (!container) return;
