@@ -26,6 +26,10 @@ function safeJSON(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch(e) { return fallback; }
 }
 
+function sortRecipes(list) {
+  return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+}
+
 // ── BOOT ──────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
@@ -36,10 +40,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function bootApp() {
-  state.recipes = DEMO_RECIPES;
+  state.recipes = sortRecipes(DEMO_RECIPES);
   const app = document.getElementById('app');
   if (app) app.classList.remove('hidden');
-  // Ensure detail panel starts hidden (clears any stuck inline styles from previous sessions)
   const panel = document.getElementById('detail-panel');
   if (panel) { panel.classList.add('hidden'); panel.style.cssText = ''; }
   updateCloudBadge();
@@ -90,8 +93,7 @@ function updateCloudBadge() {
   if (label) label.textContent = sd ? (drive.userProfile?.email || 'Google Drive') : 'Sign in to connect';
 }
 
-// ── CUISINE CHIPS ─────────────────────────────────────────────────────────────
-// ── TOP NAV DROPDOWN ──────────────────────────────────────────────────────────
+// ── CUISINE DROPDOWN & CHIPS ──────────────────────────────────────────────────
 function handleRecipesClick() {
   navigate('recipes');
   const menu = document.getElementById('cuisine-dropdown');
@@ -101,7 +103,6 @@ function handleRecipesClick() {
   menu.classList.toggle('hidden', !isHidden);
   if (arrow) arrow.textContent = isHidden ? '▴' : '▾';
   if (isHidden) {
-    // Build dropdown items from cuisines
     [...menu.querySelectorAll('[data-filter]:not([data-filter="all"])')].forEach(el => el.remove());
     getCuisines().forEach(c => {
       const btn = document.createElement('button');
@@ -109,7 +110,6 @@ function handleRecipesClick() {
       btn.onclick = () => selectCuisine(btn, c);
       menu.appendChild(btn);
     });
-    // Close on outside click
     setTimeout(() => {
       document.addEventListener('click', function handler(e) {
         if (!document.getElementById('tn-recipes-wrap').contains(e.target)) {
@@ -125,7 +125,8 @@ function handleRecipesClick() {
 function selectCuisine(el, filter) {
   document.querySelectorAll('#cuisine-dropdown .tn-drop-item').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
-  state.currentFilter = filter; applyFilters();
+  state.currentFilter = filter; 
+  applyFilters();
   const menu = document.getElementById('cuisine-dropdown');
   const arrow = document.getElementById('tn-recipes-arrow');
   if (menu) menu.classList.add('hidden');
@@ -155,38 +156,47 @@ function updateCuisineDatalist() {
 function setFilter(el, filter) {
   document.querySelectorAll('#cuisine-chips .chip').forEach(c=>c.classList.remove('chip-active'));
   if (el) el.classList.add('chip-active');
-  state.currentFilter=filter; applyFilters();
+  state.currentFilter=filter; 
+  applyFilters();
 }
 
-// ── SEARCH ────────────────────────────────────────────────────────────────────
+// ── SEARCH & FILTER ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  const inp=document.getElementById('search-input');
+  const inp=document.getElementById('nav-search-input') || document.getElementById('search-input');
   if (!inp) return;
   inp.addEventListener('input', e=>{
     state.currentSearch=e.target.value.trim().toLowerCase();
-    document.getElementById('search-clear')?.classList.toggle('hidden',!state.currentSearch);
+    const clr = document.getElementById('nav-search-clear') || document.getElementById('search-clear');
+    clr?.classList.toggle('hidden',!state.currentSearch);
     applyFilters();
   });
 });
 
 function clearSearch() {
-  const inp=document.getElementById('search-input');
+  const inp = document.getElementById('nav-search-input') || document.getElementById('search-input');
   if (inp) inp.value='';
   state.currentSearch='';
-  document.getElementById('search-clear')?.classList.add('hidden');
+  const clr = document.getElementById('nav-search-clear') || document.getElementById('search-clear');
+  clr?.classList.add('hidden');
   applyFilters();
 }
 
+function clearNavSearch() {
+  clearSearch();
+}
+
 function applyFilters() {
-  let list=state.recipes;
-  if (state.currentFilter&&state.currentFilter!=='all') list=list.filter(r=>r.cuisine===state.currentFilter);
+  let list = sortRecipes(state.recipes);
+  if (state.currentFilter && state.currentFilter !== 'all') {
+    list = list.filter(r => r.cuisine === state.currentFilter);
+  }
   if (state.currentSearch) {
-    const q=state.currentSearch;
-    list=list.filter(r=>
-      r.name.toLowerCase().includes(q)||
-      r.cuisine.toLowerCase().includes(q)||
-      (r.ingredients||[]).some(i=>i.item.toLowerCase().includes(q))||
-      (r.tags||[]).some(t=>t.toLowerCase().includes(q))
+    const q = state.currentSearch;
+    list = list.filter(r =>
+      r.name.toLowerCase().includes(q) ||
+      r.cuisine.toLowerCase().includes(q) ||
+      (r.ingredients||[]).some(i => i.item.toLowerCase().includes(q)) ||
+      (r.tags||[]).some(t => t.toLowerCase().includes(q))
     );
   }
   renderRecipes(list);
@@ -254,7 +264,6 @@ function openRecipe(recipe) {
   renderSteps(recipe.steps);
   updateMadeItButton();
 
-  // Show/hide save to drive button
   const btnSave = document.getElementById('btn-save-drive');
   const btnOpen = document.getElementById('btn-open-drive');
   const isImported = (recipe.tags||[]).includes('Imported') && !recipe.driveFileId;
@@ -269,7 +278,6 @@ function openRecipe(recipe) {
   if (state.isDesktop()) {
     panel.style.cssText='';
   } else {
-    // Mobile: overlay full screen
     panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;z-index:150;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;';
     panel.scrollTop=0;
   }
@@ -299,7 +307,6 @@ function renderIngredients() {
       `<li class="ingredient-item"><span class="ingredient-amount">${scaleAmount(i.amount||'',ratio)}</span><span>${i.item}</span></li>`
     ).join('');
   }
-  // Always show re-extract button if recipe has a Drive file
   const reExtractBtn = document.getElementById('btn-reextract');
   if (reExtractBtn) reExtractBtn.classList.toggle('hidden', !state.currentRecipe.driveFileId);
   const sn=document.getElementById('serving-num');
@@ -346,7 +353,7 @@ function renderSteps(steps) {
     :'<li style="color:var(--clr-muted);font-size:14px;list-style:none;padding:8px 0">No steps extracted yet.</li>';
 }
 
-// ── IN-APP VIEWER ─────────────────────────────────────────────────────────────
+// ── IN-APP VIEWER & EXPORT ────────────────────────────────────────────────────
 function printCurrentRecipe() {
   if (!state.currentRecipe) return;
   const r     = state.currentRecipe;
@@ -434,7 +441,6 @@ function printCurrentRecipe() {
   <div class="footer">Recipe Vault · ${r.name}</div>
 
   <script>
-    // Auto-trigger print dialog after fonts load
     window.onload = () => setTimeout(() => window.print(), 500);
   </script>
 </body>
@@ -468,7 +474,6 @@ function addToPlannerFromDetail() {
 async function reExtractCurrentRecipe() {
   if (!state.currentRecipe||!state.currentRecipe.driveFileId) return;
 
-  // Clear existing extracted content first so we always get fresh data
   state.currentRecipe.ingredients = [];
   state.currentRecipe.steps       = [];
   state.currentRecipe.nutrition   = null;
@@ -487,7 +492,6 @@ PDF text: ${text ? text.slice(0, 2000) : '(no text — use your knowledge of thi
 IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ingredients and steps for "${state.currentRecipe.name}".`
     }], 4000);
 
-    // Repair potentially truncated JSON
     let cleaned = raw.replace(/```json|```/g, '').trim();
     if (!cleaned.endsWith('}')) {
       const lastBrace = cleaned.lastIndexOf('}');
@@ -502,7 +506,6 @@ IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ing
     try {
       parsed = JSON.parse(cleaned);
     } catch(jsonErr) {
-      // Retry with a simpler, shorter prompt
       console.warn('JSON parse failed, retrying with shorter prompt:', jsonErr.message);
       const retryRaw = await callClaude([{
         role: 'user',
@@ -541,23 +544,14 @@ IMPORTANT: If PDF text is missing, use culinary knowledge to fill in typical ing
 }
 
 // ── COOK MODE ─────────────────────────────────────────────────────────────────
-// ── WAKE LOCK — keeps screen on during cooking mode ───────────────────────────
 let _wakeLock = null;
 
 async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) {
-    console.log('Wake Lock API not supported on this browser');
-    return;
-  }
+  if (!('wakeLock' in navigator)) return;
   try {
     _wakeLock = await navigator.wakeLock.request('screen');
-    console.log('Screen wake lock active ✓');
-    _wakeLock.addEventListener('release', () => {
-      console.log('Wake lock was released');
-    });
-  } catch(e) {
-    console.warn('Wake lock request failed:', e.message);
-  }
+    _wakeLock.addEventListener('release', () => {});
+  } catch(e) {}
 }
 
 function releaseWakeLock() {
@@ -567,7 +561,6 @@ function releaseWakeLock() {
   }
 }
 
-// Re-acquire wake lock if the tab becomes visible again while cooking
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' &&
       !document.getElementById('screen-cook')?.classList.contains('hidden')) {
@@ -585,6 +578,7 @@ function startCookMode() {
   renderCookStep();
   requestWakeLock();
 }
+
 function renderCookStep() {
   const steps=state.cookSteps,idx=state.cookStepIndex,total=steps.length;
   const txt=document.getElementById('cook-step-text');
@@ -599,12 +593,14 @@ function renderCookStep() {
   if (next) next.textContent=idx===total-1?'✓ Done':'Next →';
   if (state.voiceActive&&document.getElementById('voice-read')?.checked) speakStep(steps[idx]);
 }
+
 function changeStep(delta) {
   const next=state.cookStepIndex+delta;
   if (next<0) return;
   if (next>=state.cookSteps.length){stopCookMode();return;}
   state.cookStepIndex=next;renderCookStep();
 }
+
 function stopCookMode() {
   if (state.voiceActive) stopVoice();
   state.speechSynth?.cancel();
@@ -778,7 +774,7 @@ function buildDayPicker(recipeId){
   if(rId){
     picker.innerHTML=days.map((d,i)=>{const key=d.toISOString().slice(0,10);const count=(state.plannerData[key]||[]).length;return `<button class="day-pick-btn" onclick="addMealToDay('${key}','${rId}')"><span>${dayNames[i]} <span style="color:var(--clr-muted);font-size:12px">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span></span><span class="day-pick-count">${count} meal${count!==1?'s':''}</span></button>`;}).join('');
   } else {
-    picker.innerHTML=state.recipes.map(r=>`<button class="day-pick-btn" onclick="addMealToDay('${state.pendingDayKey}','${r.id}')"><span>${r.emoji||'🍽️'} ${r.name}</span><span class="day-pick-count">${r.cuisine}</span></button>`).join('');
+    picker.innerHTML=sortRecipes(state.recipes).map(r=>`<button class="day-pick-btn" onclick="addMealToDay('${state.pendingDayKey}','${r.id}')"><span>${r.emoji||'🍽️'} ${r.name}</span><span class="day-pick-count">${r.cuisine}</span></button>`).join('');
   }
 }
 function addMealToDay(dateKey,recipeId){
@@ -843,7 +839,6 @@ ${text.slice(0, 4000)}`;
 
     const recipe = await importRecipeFromURL(prompt);
 
-    // Populate the direct fields
     if (recipe.name)        document.getElementById('paste-name').value        = recipe.name;
     if (recipe.cuisine)     document.getElementById('paste-cuisine').value     = recipe.cuisine;
     if (recipe.time)        document.getElementById('paste-time').value        = recipe.time;
@@ -851,7 +846,6 @@ ${text.slice(0, 4000)}`;
     if (recipe.ingredients) document.getElementById('paste-ingredients').value = (recipe.ingredients||[]).map(i => (i.amount ? i.amount + ' ' : '') + i.item).join('\n');
     if (recipe.steps)       document.getElementById('paste-steps').value       = (recipe.steps||[]).join('\n');
 
-    // Clear the paste text area
     document.getElementById('paste-text').value = '';
     showToast('Recipe structured ✓ — review the fields and save');
   } catch(e) {
@@ -882,8 +876,10 @@ async function savePastedRecipe() {
     steps, nutrition: null,
   };
 
-  state.recipes.unshift(newRecipe);
-  buildCuisineChips(); applyFilters();
+  state.recipes.push(newRecipe);
+  state.recipes = sortRecipes(state.recipes);
+  buildCuisineChips(); 
+  applyFilters();
   clearPasteTab();
   navigate('recipes');
 
@@ -918,19 +914,13 @@ async function extractRecipe() {
 
   try {
     let prompt;
-
-    // Check if it's a YouTube URL — fetch content differently
     const isYouTube = /youtube\.com|youtu\.be/i.test(url);
 
     if (isYouTube) {
-      // Use YouTube Data API to fetch real title and description
       showToast('Fetching video details…');
       const yt = await fetchYouTubeDetails(url);
-      console.log('YouTube API result:', yt);
 
       if (yt) {
-        // Check if description contains a recipe website link
-        // Many YouTubers (Andy Cooks etc) link to their recipe site instead of listing ingredients
         const urlRegex = /https?:\/\/[^\s]+/g;
         const descUrls = yt.description.match(urlRegex) || [];
         const recipeUrl = descUrls.find(u =>
@@ -947,9 +937,7 @@ async function extractRecipe() {
         );
 
         if (recipeUrl) {
-          // Found a recipe website link — fetch from there instead
           showToast('Found recipe website — fetching…');
-          console.log('Following recipe URL from description:', recipeUrl);
           try {
             const pageContent = await fetchPageContent(recipeUrl);
             if (pageContent && pageContent.length > 200) {
@@ -962,16 +950,12 @@ ${pageContent.slice(0, 2000)}`;
               throw new Error('Page content too short');
             }
           } catch(e) {
-            // Fall back to description
-            console.log('Could not fetch recipe URL, using description:', e.message);
-            const descSnippet = yt.description.slice(0, 1500);
             prompt = `Extract the recipe from this YouTube video. Return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 Video: "${yt.title}" by ${yt.channel}
 Use your culinary knowledge to generate a typical recipe for "${yt.title}".`;
           }
         } else {
-          // No external link — use description directly or AI knowledge
           const descSnippet = yt.description.slice(0, 1500);
           const hasRecipeInDesc = /ingredient|tbsp|tsp|cup|gram|ml|oz|\d+g\b/i.test(descSnippet);
           if (hasRecipeInDesc) {
@@ -980,7 +964,6 @@ Use your culinary knowledge to generate a typical recipe for "${yt.title}".`;
 Video: "${yt.title}" by ${yt.channel}
 Description: ${descSnippet}`;
           } else {
-            // Description has no recipe — use AI knowledge
             prompt = `Generate a recipe for this YouTube video. Return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}
 Video title: "${yt.title}" by ${yt.channel}
@@ -989,7 +972,6 @@ Use your culinary knowledge to create an accurate recipe for "${yt.title}".`;
         }
         showToast('Extracting recipe…');
       } else {
-        console.log('YouTube API returned no results — falling back to URL guess');
         const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/\s]{11})/)?.[1] || '';
         prompt = `A user wants to import a recipe from this YouTube video: ${url}
 ${videoId ? `Video ID: ${videoId}` : ''}
@@ -998,16 +980,14 @@ Return ONLY valid JSON (no markdown):
 {"name":"","cuisine":"","time":"","servings":4,"ingredients":[{"amount":"","item":""}],"steps":[""]}`;
       }
     } else {
-      // For regular websites, try to fetch the page content
       let pageContent = '';
       try { pageContent = await fetchPageContent(url); } catch(e) {}
 
       if (!pageContent || pageContent.length < 100) {
-        // Cannot reach site — show error instead of hallucinating
         const el = document.getElementById('import-error');
         if (el) {
-          el.innerHTML = 'Could not access this website — it may block automated access (like Delish, NYT Cooking etc).<br><br>' +
-            '<strong>Try instead:</strong> Open the recipe page in your browser, select all text (Ctrl+A), copy it (Ctrl+C), then use the <strong>"Paste text"</strong> tab below to paste it directly.';
+          el.innerHTML = 'Could not access this website — it may block automated access.<br><br>' +
+            '<strong>Try instead:</strong> Open the recipe page, select and copy all text, then use the <strong>"Paste text"</strong> tab to paste it directly.';
           el.classList.remove('hidden');
         }
         document.getElementById('import-preview')?.classList.remove('hidden');
@@ -1062,11 +1042,13 @@ async function saveImportedRecipe() {
     ingredients:ings.map(line=>{const m=line.match(/^([\d.\/]+\s*(?:g|kg|ml|l|tsp|tbsp|cup|oz|lb|cloves?|bunch|pinch|large|medium|small|handful)?)\s+(.*)/i);return m?{amount:m[1].trim(),item:m[2].trim()}:{amount:'',item:line};}),
     steps,nutrition:null,
   };
-  state.recipes.unshift(newRecipe);
-  buildCuisineChips();applyFilters();
-  resetImport();navigate('recipes');
+  state.recipes.push(newRecipe);
+  state.recipes = sortRecipes(state.recipes);
+  buildCuisineChips();
+  applyFilters();
+  resetImport();
+  navigate('recipes');
 
-  // Save to Google Drive
   if (typeof saveRecipeToDrive === 'function' && drive?.isSignedIn) {
     showToast('Saving "' + name + '" to Google Drive…');
     try { await saveRecipeToDrive(newRecipe); } catch(e) { showToast('Drive save failed: ' + e.message); }
@@ -1079,18 +1061,16 @@ function guessEmoji(cuisine){
   const map={italian:'🍝',mexican:'🌮',japanese:'🍣',chinese:'🥢',indian:'🍛',french:'🥐',thai:'🍜',vietnamese:'🍜',american:'🍔',greek:'🫒',spanish:'🥘',korean:'🍱',bread:'🍞',dessert:'🍰',soup:'🍲',salad:'🥗',seafood:'🐟'};
   return map[(cuisine||'').toLowerCase()]||'🍽️';
 }
+
 function resetImport() {
-  // Clear URL
   const url = document.getElementById('import-url');
   if (url) url.value = '';
-  // Clear all recipe fields
   ['imp-name','imp-cuisine','imp-time','imp-ingredients','imp-steps'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   const servings = document.getElementById('imp-servings');
   if (servings) servings.value = '4';
-  // Hide preview and error
   document.getElementById('import-preview')?.classList.add('hidden');
   document.getElementById('import-error')?.classList.add('hidden');
 }
@@ -1108,8 +1088,10 @@ async function saveCurrentRecipeToDrive() {
       state.currentRecipe.tags.push('From Drive');
       const idx=state.recipes.findIndex(r=>r.id===state.currentRecipe.id);
       if(idx!==-1)state.recipes[idx]={...state.currentRecipe};
+      state.recipes = sortRecipes(state.recipes);
       if(btn)btn.classList.add('hidden');
       document.getElementById('btn-open-drive')?.classList.remove('hidden');
+      applyFilters();
     }
   } catch(e){
     showToast('Save failed: '+e.message);
@@ -1120,17 +1102,15 @@ async function saveCurrentRecipeToDrive() {
 // ── EDIT RECIPE ───────────────────────────────────────────────────────────────
 const FOOD_EMOJIS = ['🍝','🍛','🌮','🍣','🍕','🥘','🍜','🥗','🍲','🥩','🍗','🐟','🦐','🥚','🥞','🍞','🥐','🥨','🧀','🥦','🫕','🍱','🥟','🦪','🍤','🌯','🫔','🥙','🧆','🥜','🍖','🍔','🌭','🫙','🧂','🫚','🥫','🍿','🧁','🎂','🍰','🍮','🍭','🍫','🍩','🍪','🍨','🍧','🧇','🫓'];
 
-let editThumbValue = null; // stores emoji string or base64 image data
+let editThumbValue = null;
 
 function openEditRecipeModal() {
   if (!state.currentRecipe) return;
   const r = state.currentRecipe;
 
-  // Set current thumbnail
   editThumbValue = r.thumbImage || r.emoji || '🍽️';
   updateThumbPreview();
 
-  // Build emoji picker
   const picker = document.getElementById('emoji-picker');
   if (picker) {
     picker.innerHTML = FOOD_EMOJIS.map(e =>
@@ -1154,10 +1134,8 @@ function updateThumbPreview() {
   const preview = document.getElementById('edit-thumb-preview');
   if (!preview) return;
   if (editThumbValue && editThumbValue.startsWith('data:')) {
-    // Photo
     preview.innerHTML = `<img src="${editThumbValue}" style="width:100%;height:100%;object-fit:cover;border-radius:10px" />`;
   } else {
-    // Emoji
     preview.textContent = editThumbValue || '🍽️';
   }
 }
@@ -1165,7 +1143,6 @@ function updateThumbPreview() {
 function selectThumbEmoji(emoji) {
   editThumbValue = emoji;
   updateThumbPreview();
-  // Highlight selected
   document.querySelectorAll('#emoji-picker button').forEach(btn => {
     btn.style.borderColor = btn.textContent === emoji ? 'var(--clr-coral)' : 'transparent';
     btn.style.background  = btn.textContent === emoji ? 'var(--clr-coral-lt)' : 'transparent';
@@ -1180,7 +1157,6 @@ function handleThumbUpload(event) {
 
   const reader = new FileReader();
   reader.onload = e => {
-    // Resize image to max 200x200 to keep storage small
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
@@ -1188,7 +1164,6 @@ function handleThumbUpload(event) {
       canvas.width  = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
-      // Centre-crop
       const sx = (img.width  - size) / 2;
       const sy = (img.height - size) / 2;
       ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
@@ -1222,8 +1197,8 @@ async function saveEditedRecipe() {
   state.currentRecipe = updated;
   const idx = state.recipes.findIndex(r => r.id === updated.id);
   if (idx !== -1) state.recipes[idx] = updated;
+  state.recipes = sortRecipes(state.recipes);
 
-  // Save thumbnail to localStorage (keyed by recipe ID)
   if (updated.thumbImage) {
     try { localStorage.setItem('rv_thumb_' + updated.id, updated.thumbImage); } catch(e) {}
   } else {
@@ -1273,7 +1248,7 @@ async function executeDeleteRecipe() {
   closeDetail();buildCuisineChips();applyFilters();
 }
 
-// ── SETTINGS ──────────────────────────────────────────────────────────────────
+// ── SETTINGS HELPERS ──────────────────────────────────────────────────────────
 function toggleKeyVisibility(fieldId) {
   const field = document.getElementById(fieldId);
   if (!field) return;
@@ -1293,35 +1268,6 @@ function saveYouTubeKey() {
   showToast('YouTube key saved ✓');
 }
 
-function saveGeminiKey() {
-  const field = document.getElementById('gemini-key');
-  if (!field) return;
-  const key = field.value.trim();
-  if (!key) {
-    localStorage.removeItem('rv_gemini_key');
-    showToast('Gemini key cleared');
-    return;
-  }
-  if (!key.startsWith('AIza')) { showToast('Gemini key should start with AIza'); return; }
-  localStorage.setItem('rv_gemini_key', key);
-  // Save model name too
-  const modelField = document.getElementById('gemini-model');
-  if (modelField && modelField.value.trim()) {
-    localStorage.setItem('rv_gemini_model', modelField.value.trim());
-  }
-  const status = document.getElementById('gemini-key-status');
-  if (status) { status.textContent = '✓ Gemini key active — free AI enabled'; status.style.color = 'var(--clr-coral)'; }
-  showToast('Gemini key saved ✓ — free AI active!');
-}
-
-function saveAnthropicKey(){
-  const field=document.getElementById('anthropic-key');if(!field)return;
-  const key=field.value.trim();
-  if(!key){showToast('Please enter your API key');return;}
-  if(!key.startsWith('sk-ant-')){showToast('Key should start with sk-ant-');return;}
-  localStorage.setItem('rv_anthropic_key',key);
-  showToast('API key saved ✓ — AI features now active');
-}
 function resync() {
   if (typeof syncFromDrive === 'function' && drive?.isSignedIn) {
     syncFromDrive();
@@ -1331,67 +1277,3 @@ function resync() {
   }
 }
 function connectCloud(){}
-function switchCloud(){}
-function updateSettingsCloud(){renderSettings();}
-function updateSettingsStats(){renderSettings();}
-
-// ── MADE IT ───────────────────────────────────────────────────────────────────
-function getMadeItHistory() {
-  try { return JSON.parse(localStorage.getItem('rv_made_it') || '{}'); } catch(e) { return {}; }
-}
-
-function saveMadeItHistory(history) {
-  try { localStorage.setItem('rv_made_it', JSON.stringify(history)); } catch(e) {}
-}
-
-function markAsMade() {
-  if (!state.currentRecipe) return;
-  const id      = state.currentRecipe.id;
-  const history = getMadeItHistory();
-  if (!history[id]) history[id] = { count: 0, dates: [] };
-  history[id].count++;
-  history[id].last = new Date().toISOString();
-  history[id].dates.unshift(new Date().toISOString());
-  history[id].dates = history[id].dates.slice(0, 10); // keep last 10
-  saveMadeItHistory(history);
-  updateMadeItButton();
-  applyFilters(); // refresh cards to show updated badge
-  showToast('Cooked ' + history[id].count + ' time' + (history[id].count !== 1 ? 's' : '') + '! ✅');
-}
-
-function updateMadeItButton() {
-  if (!state.currentRecipe) return;
-  const history = getMadeItHistory();
-  const record  = history[state.currentRecipe.id];
-  const btn     = document.getElementById('btn-made-it');
-  const info    = document.getElementById('made-it-info');
-  if (!btn) return;
-  if (record && record.last) {
-    const date  = new Date(record.last);
-    const label = date.toLocaleDateString('en-US', { day:'numeric', month:'short', year:'numeric' });
-    btn.innerHTML = '✅ Made it again!';
-    btn.style.cssText = 'background:var(--clr-paper-mid);color:var(--clr-ink);border-color:var(--clr-border-mid)';
-    if (info) info.textContent = 'Last made: ' + label + ' · ' + record.count + ' time' + (record.count !== 1 ? 's' : '');
-  } else {
-    btn.innerHTML = '✅ Mark as made';
-    btn.style.cssText = '';
-    if (info) info.textContent = '';
-  }
-}
-
-// ── MODALS ────────────────────────────────────────────────────────────────────
-function closeModal(id){document.getElementById(id)?.classList.add('hidden');}
-document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))e.target.classList.add('hidden');});
-
-// ── TOAST ─────────────────────────────────────────────────────────────────────
-function showToast(msg){
-  let t=document.getElementById('rv-toast');
-  if(!t){
-    t=document.createElement('div');t.id='rv-toast';
-    Object.assign(t.style,{position:'fixed',bottom:'80px',left:'50%',transform:'translateX(-50%)',background:'var(--clr-ink)',color:'var(--clr-paper)',padding:'10px 22px',borderRadius:'24px',fontSize:'14px',fontWeight:'500',zIndex:'9999',whiteSpace:'nowrap',transition:'opacity .3s',fontFamily:'var(--font-ui)',boxShadow:'0 4px 20px rgba(0,0,0,.3)',pointerEvents:'none',maxWidth:'90vw',textAlign:'center'});
-    document.body.appendChild(t);
-  }
-  t.textContent=msg;t.style.opacity='1';
-  clearTimeout(t._timer);
-  t._timer=setTimeout(()=>{t.style.opacity='0';},2800);
-}
