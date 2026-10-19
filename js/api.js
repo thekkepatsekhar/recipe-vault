@@ -1,6 +1,4 @@
-// ── RECIPE VAULT — AI API ─────────────────────────────────────────────────────
-// Uses DeepSeek only — ultra cheap at $0.14/$0.28 per million tokens
-// Get a key at: https://platform.deepseek.com
+// ── RECIPE VAULT — AI & EXTERNAL API ──────────────────────────────────────────
 
 async function callClaude(messages, maxTokens = 2500) {
   const apiKey = localStorage.getItem('rv_deepseek_key');
@@ -51,38 +49,74 @@ Text: ${pdfText ? pdfText.slice(0, 1200) : '(use culinary knowledge)'}
 ${METRIC_INSTRUCTION}
 Keep steps concise. Max 12 ingredients, max 10 steps.`;
 
-  const raw     = await callClaude([{ role: 'user', content: prompt }]);
-  let   cleaned = raw.replace(/```json|```/g, '').trim();
+  const raw = await callClaude([{ role: 'user', content: prompt }]);
+  return sanitizeAndParseJSON(raw);
+}
+
+async function importRecipeFromURL(prompt) {
+  const fullPrompt = prompt + '\n\n' + METRIC_INSTRUCTION;
+  const raw = await callClaude([{ role: 'user', content: fullPrompt }]);
+  return sanitizeAndParseJSON(raw);
+}
+
+function sanitizeAndParseJSON(raw) {
+  let cleaned = raw.replace(/```json|```/g, '').trim();
   if (!cleaned.endsWith('}')) {
     const last = cleaned.lastIndexOf('}');
     if (last > 0) {
       cleaned = cleaned.slice(0, last + 1);
-      while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
+      while ((cleaned.match(/\[/g)\vert{}\vert{}[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
       while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
     }
   }
   return JSON.parse(cleaned);
 }
 
-async function importRecipeFromURL(prompt) {
-  const fullPrompt = prompt + '\n\n' + METRIC_INSTRUCTION;
-  const raw     = await callClaude([{ role: 'user', content: fullPrompt }]);
-  let   cleaned = raw.replace(/```json|```/g, '').trim();
-  if (!cleaned.endsWith('}')) {
-    const last = cleaned.lastIndexOf('}');
-    if (last > 0) {
-      cleaned = cleaned.slice(0, last + 1);
-      while ((cleaned.match(/\[/g)||[]).length > (cleaned.match(/\]/g)||[]).length) cleaned += ']';
-      while ((cleaned.match(/\{/g)||[]).length > (cleaned.match(/\}/g)||[]).length) cleaned += '}';
+// ── YOUTUBE DETAILS HELPER ────────────────────────────────────────────────────
+async function fetchYouTubeDetails(url) {
+  const videoId = url.match(/(?:v=|youtu\.be\/|shorts\/)([^&?/\s]{11})/)?.[1];
+  if (!videoId) return null;
+
+  const ytKey = localStorage.getItem('rv_youtube_key');
+  if (ytKey) {
+    try {
+      const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${ytKey}`);
+      if (res.ok) {
+        const data = await res.json();
+        const snippet = data.items?.[0]?.snippet;
+        if (snippet) {
+          return {
+            title: snippet.title || '',
+            description: snippet.description || '',
+            channel: snippet.channelTitle || '',
+          };
+        }
+      }
+    } catch(e) {
+      console.warn('YouTube API fetch failed:', e.message);
     }
   }
-  return JSON.parse(cleaned);
+
+  // Fallback via no-embed proxy if no YouTube API key is provided
+  try {
+    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`);
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        title: data.title || '',
+        description: '',
+        channel: data.author_name || '',
+      };
+    }
+  } catch(e) {}
+
+  return null;
 }
 
 // ── PAGE FETCH ────────────────────────────────────────────────────────────────
 async function fetchPageContent(url) {
   try {
-    const res  = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+    const res = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
     if (res.ok) {
       const json = await res.json();
       const html = json.contents || '';
@@ -104,11 +138,11 @@ function extractRecipeText(html) {
   for (const block of jsonLdMatches) {
     const content = block.replace(/<script[^>]*>/i,'').replace(/<\/script>/i,'').trim();
     try {
-      const data  = JSON.parse(content);
+      const data = JSON.parse(content);
       const items = Array.isArray(data) ? data : [data];
       const recipe = items.find(d => d['@type']==='Recipe' || (Array.isArray(d['@type']) && d['@type'].includes('Recipe')));
       if (recipe) {
-        const ings  = (recipe.recipeIngredient||[]).join('\n');
+        const ings = (recipe.recipeIngredient||[]).join('\n');
         const steps = (recipe.recipeInstructions||[]).map(i=>typeof i==='string'?i:(i.text||i.name||'')).filter(Boolean).join('\n');
         if (ings||steps) return `STRUCTURED RECIPE:\nName: ${recipe.name||''}\nTime: ${recipe.totalTime||recipe.cookTime||''}\nServings: ${recipe.recipeYield||''}\n\nINGREDIENTS:\n${ings}\n\nSTEPS:\n${steps}`;
       }
