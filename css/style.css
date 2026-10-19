@@ -55,7 +55,7 @@ ul,ol{list-style:none}
 .tn-arrow{font-size:11px;margin-left:2px}
 .tn-badge{background:var(--clr-coral);color:#fff;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:2px}
 .tn-dropdown{position:relative}
-.tn-dropdown-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--clr-ink);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-md);padding:6px;min-width:180px;z-index:200;box-shadow:var(--shadow-lift)}
+.tn-dropdown-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--clr-ink);border:1px solid rgba(255,255,255,.12);border-radius:var(--radius-md);padding:6px;min-width:200px;max-height:calc(100vh - 80px);overflow-y:auto;z-index:200;box-shadow:var(--shadow-lift)}
 .tn-drop-item{display:block;width:100%;text-align:left;padding:9px 14px;border-radius:var(--radius-sm);font-size:14px;color:rgba(255,255,255,.6);transition:all .12s}
 .tn-drop-item:hover{background:rgba(255,255,255,.09);color:#fff}
 .tn-drop-item.active{color:var(--clr-coral)}
@@ -138,7 +138,6 @@ ul,ol{list-style:none}
 
 /* ── RECIPE GRID ── */
 .recipe-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-/* FIXED: cards always white with dark text — never dark background */
 .recipe-card{background:#ffffff;border:1px solid var(--clr-border);border-radius:var(--radius-md);padding:16px;cursor:pointer;transition:box-shadow .15s,transform .12s;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-card)}
 .recipe-card:hover{box-shadow:var(--shadow-lift);transform:translateY(-2px)}
 .recipe-card:active{transform:scale(.98)}
