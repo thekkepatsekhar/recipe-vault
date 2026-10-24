@@ -64,7 +64,7 @@ function navigate(screen) {
   if (screen === 'shopping') renderShopping();
   if (screen === 'planner')  renderPlannerWeek();
   if (screen === 'settings') renderSettings();
-  if (screen === 'import')   { resetImport(); switchImportTab('url'); }
+  if (screen === 'import')   { clearPasteTab(); }
   if (screen !== 'recipes' && !state.isDesktop()) closeDetail();
 }
 
@@ -160,20 +160,43 @@ function setFilter(el, filter) {
 
 // ── SEARCH ────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  const inp=document.getElementById('search-input');
-  if (!inp) return;
-  inp.addEventListener('input', e=>{
-    state.currentSearch=e.target.value.trim().toLowerCase();
-    document.getElementById('search-clear')?.classList.toggle('hidden',!state.currentSearch);
-    applyFilters();
-  });
+  // Top-nav search (desktop)
+  const navInp = document.getElementById('nav-search-input');
+  if (navInp) {
+    navInp.addEventListener('input', e => {
+      state.currentSearch = e.target.value.trim().toLowerCase();
+      document.getElementById('nav-search-clear')?.classList.toggle('hidden', !state.currentSearch);
+      applyFilters();
+    });
+  }
+  // Legacy inline search (fallback)
+  const inp = document.getElementById('search-input');
+  if (inp) {
+    inp.addEventListener('input', e => {
+      state.currentSearch = e.target.value.trim().toLowerCase();
+      document.getElementById('search-clear')?.classList.toggle('hidden', !state.currentSearch);
+      applyFilters();
+    });
+  }
 });
 
+function clearNavSearch() {
+  const inp = document.getElementById('nav-search-input');
+  if (inp) inp.value = '';
+  state.currentSearch = '';
+  document.getElementById('nav-search-clear')?.classList.add('hidden');
+  applyFilters();
+}
+
 function clearSearch() {
-  const inp=document.getElementById('search-input');
-  if (inp) inp.value='';
-  state.currentSearch='';
+  const inp = document.getElementById('search-input');
+  if (inp) inp.value = '';
+  // Also clear nav search if present
+  const navInp = document.getElementById('nav-search-input');
+  if (navInp) navInp.value = '';
+  state.currentSearch = '';
   document.getElementById('search-clear')?.classList.add('hidden');
+  document.getElementById('nav-search-clear')?.classList.add('hidden');
   applyFilters();
 }
 
@@ -205,7 +228,7 @@ function renderRecipes(list) {
   if (countLbl) countLbl.textContent=list.length+' recipe'+(list.length!==1?'s':'');
   list.forEach(recipe=>{
     const card=document.createElement('div');
-    card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0');
+    card.className='recipe-card'; card.setAttribute('role','listitem'); card.setAttribute('tabindex','0'); card.setAttribute('title', recipe.name);
     const thumb = recipe.thumbImage
       ? `<img src="${recipe.thumbImage}" style="width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px)" />`
       : (recipe.emoji || '🍽️');
