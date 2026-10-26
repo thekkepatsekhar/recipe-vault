@@ -79,6 +79,7 @@ function renderSettings() {
   if (mc) { const t=Object.values(state.plannerData).reduce((s,a)=>s+a.length,0); mc.textContent=t+' meal'+(t!==1?'s':'')+' planned'; }
   const ytField = document.getElementById('youtube-key');
   if (ytField) ytField.value = localStorage.getItem('rv_youtube_key') || '';
+  updateDeepSeekStatus();
 }
 
 // ── CLOUD BADGE ───────────────────────────────────────────────────────────────
@@ -1335,6 +1336,40 @@ function saveGeminiKey() {
   const status = document.getElementById('gemini-key-status');
   if (status) { status.textContent = '✓ Gemini key active — free AI enabled'; status.style.color = 'var(--clr-coral)'; }
   showToast('Gemini key saved ✓ — free AI active!');
+}
+
+function saveDeepSeekKey() {
+  const field = document.getElementById('deepseek-key');
+  if (!field) return;
+  const key = field.value.trim();
+  if (!key) { showToast('Please enter your DeepSeek key'); return; }
+  localStorage.setItem('rv_deepseek_key', key);
+  updateDeepSeekStatus();
+  showToast('DeepSeek key saved ✓ — AI extraction ready');
+}
+
+function clearDeepSeekKey() {
+  localStorage.removeItem('rv_deepseek_key');
+  const field = document.getElementById('deepseek-key');
+  if (field) field.value = '';
+  updateDeepSeekStatus();
+  showToast('DeepSeek key cleared');
+}
+
+function updateDeepSeekStatus() {
+  const status = document.getElementById('deepseek-status');
+  const field  = document.getElementById('deepseek-key');
+  const key    = localStorage.getItem('rv_deepseek_key');
+  if (status) {
+    if (key) {
+      status.textContent = '✓ Key saved — AI active';
+      status.style.color = 'var(--clr-coral)';
+    } else {
+      status.textContent = 'No key — extraction disabled';
+      status.style.color = 'var(--clr-muted)';
+    }
+  }
+  if (field && key) field.value = key;
 }
 
 function saveAnthropicKey(){
